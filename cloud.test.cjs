@@ -227,3 +227,8 @@ test('injected game validation rejects structurally corrupt remote saves',async(
   const f=fixture({create:{validate:data=>Array.isArray(data.athletes)&&data.athletes.length===12}});await f.cloud.init();
   await assert.rejects(f.cloud.load(),{code:'invalid_save'});
 });
+test('the cloud deadline also covers a stalled large-save response body',async()=>{
+  const f=fixture({timeoutMs:10});await f.cloud.init();
+  f.setRoute(()=>({ok:true,status:200,json:()=>new Promise(()=>{})}));
+  await assert.rejects(f.cloud.load(),{code:'network'});assert.equal(f.cloud.getStatus().user.id,A.id);
+});

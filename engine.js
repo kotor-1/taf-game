@@ -3,6 +3,8 @@
   'use strict';
   const VERSION = 2;
   const START_YEAR = 2026;
+  const MAX_COUNT = Number.MAX_SAFE_INTEGER;
+  const MAX_YEAR = MAX_COUNT - START_YEAR - 2;
   const STAT_KEYS = ['speed', 'stamina', 'power', 'technique', 'agility', 'flexibility', 'mental'];
   const STAT_NAMES = { speed: 'スピード', stamina: '持久力', power: 'パワー', technique: '技術', agility: '敏捷性', flexibility: '柔軟性', mental: '精神力' };
   const EVENTS = [
@@ -52,6 +54,18 @@
     { id: 'recovery', name: 'ケア設備', description: '毎週の疲労を軽減し、休養の回復量を増やす。', baseCost: 45000 },
     { id: 'club', name: '部室', description: '週間収入と練習意欲、全員の成長を後押し。', baseCost: 75000 }
   ];
+  const CAREER_GOALS = [
+    { id: 'personalBests', name: '一人ひとりの自己ベスト', description: '公認の個人種目で自己ベストを20回。初記録も数えます。', target: 20, reward: 50000 },
+    { id: 'allRound', name: '種目の垣根を越えて', description: '男女・種目別の6区分で公認大会3位以内。', target: 6, reward: 60000 },
+    { id: 'relay', name: '男女でつなぐバトン', description: '男子・女子の両リレーで公認大会3位以内。', target: 2, reward: 60000 },
+    { id: 'interhigh', name: '全国のスタートライン', description: 'インターハイ本大会に正式出場する。', target: 1, reward: 80000 },
+    { id: 'champion', name: '全国の頂点へ', description: 'インターハイ本大会で金メダルを獲得する。', target: 1, reward: 100000 },
+    { id: 'indoor', name: '冬にも輝くチーム', description: 'U18・U20室内日本選手権で3位以内。', target: 1, reward: 80000 }
+  ];
+  const CAREER_MODES = [
+    { id: 'normal', name: '通常', rivalBonus: 0, nationalBonus: 0, description: 'いつもの相手と競い、部の歴史を積み重ねます。' },
+    { id: 'challenge', name: '強豪校チャレンジ', rivalBonus: 4, nationalBonus: 8, description: '相手の能力が地区・県・地方で+4、全国大会で+8。育成効果は通常と同じ。自チームの能力への直接補正はありません。' }
+  ];
   const MEETS = [
     { id: 'district', name: 'インターハイ 地区予選', week: 5, dateLabel: '5月1週', kind: 'school', level: 1, rating: 55, prize: 14000, next: 'prefecture', description: '男女・種目別に3位以内の選手が県大会へ。' },
     { id: 'prefecture', name: 'インターハイ 県大会', week: 7, dateLabel: '5月3週', kind: 'school', level: 2, rating: 65, prize: 22000, next: 'regional', description: '地区予選を通過した選手が競う。3位以内で地方大会へ。' },
@@ -80,6 +94,8 @@
   const GENDER_NAMES = { boys: '男子', girls: '女子' };
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
   const round = (v, places = 1) => Number(v.toFixed(places));
+  const safeAdd = (value, increase) => Math.min(MAX_COUNT, value + increase);
+  const copy = value => JSON.parse(JSON.stringify(value));
   const findEvent = id => EVENTS.find(event => event.id === id);
   const fail = message => ({ ok: false, message });
   const validState = state => !!state && state.version === VERSION && Array.isArray(state.athletes);
@@ -95,6 +111,124 @@
   function getDefaultTraining(eventId) { return ({ '100m': 'sprint', '60m': 'sprint', '400m': 'balanced', '1500m': 'endurance', '110mh': 'hurdles', '100mh': 'hurdles', '60mh': 'hurdles', longjump: 'jump', highjump: 'jump', polevault: 'technique', triplejump: 'jump', relay: 'relay' })[eventId] || 'balanced'; }
   function getAthleteRating(athlete, eventId) { const event = findEvent(eventId); return !event || !athlete?.stats ? 0 : round(Object.entries(event.weights).reduce((sum, [key, weight]) => sum + (Number(athlete.stats[key]) || 0) * weight, 0)); }
   function getSuitability(athlete) { return INDIVIDUAL_EVENTS.filter(e => !e.gender || e.gender === athlete.gender).map(event => { const rating = getAthleteRating(athlete, event.id); return { eventId: event.id, name: event.name, rating, rank: rating >= 90 ? 'S' : rating >= 80 ? 'A' : rating >= 70 ? 'B' : rating >= 60 ? 'C' : rating >= 50 ? 'D' : rating >= 40 ? 'E' : 'F', description: event.description }; }).sort((a, b) => b.rating - a.rating); }
+  function freshCareerStats() { return { personalBests: 0, podiumDivisions: [], relayPodiums: [], interhighEntries: 0, interhighWins: 0, indoorPodiums: 0, meetCount: 0, medals: { gold: 0, silver: 0, bronze: 0 } }; }
+  function freshCareerSeason(year, goalId = 'personalBests', mode = 'normal') { return { year, goalId, mode, goalRewarded: false, goalAchievedWeek: null, stats: freshCareerStats() }; }
+  function careerGoalProgress(season) {
+    const goal = CAREER_GOALS.find(g => g.id === season.goalId), stats = season.stats;
+    const current = ({ personalBests: stats.personalBests, allRound: stats.podiumDivisions.length, relay: stats.relayPodiums.length, interhigh: stats.interhighEntries, champion: stats.interhighWins, indoor: stats.indoorPodiums })[goal.id];
+    return { ...goal, current, achieved: current >= goal.target, rewarded: season.goalRewarded };
+  }
+  function countCareerMeet(stats, meet) {
+    if (meet.results.length) stats.meetCount = safeAdd(stats.meetCount, 1);
+    for (const r of meet.results) {
+      if (!r.official) continue;
+      if (!findEvent(r.eventId).teamSize && (r.personalBest ?? r.newBest)) stats.personalBests = safeAdd(stats.personalBests, 1);
+      if (r.medal) stats.medals[r.medal] = safeAdd(stats.medals[r.medal], 1);
+      if (r.rank <= 3) {
+        if (!stats.podiumDivisions.includes(r.divisionKey)) stats.podiumDivisions.push(r.divisionKey);
+        if (r.eventId === 'relay' && !stats.relayPodiums.includes(r.gender)) stats.relayPodiums.push(r.gender);
+        if (meet.kind === 'indoor') stats.indoorPodiums = safeAdd(stats.indoorPodiums, 1);
+      }
+      if (meet.id === 'nationals') { stats.interhighEntries = safeAdd(stats.interhighEntries, 1); if (r.rank === 1) stats.interhighWins = safeAdd(stats.interhighWins, 1); }
+    }
+  }
+  function registerSchoolRecord(career, meet, result) {
+    if (!result.official) return false;
+    const recordKey = getRecordKey(result.eventId, result.hurdleHeight), key = result.gender + ':' + recordKey;
+    const old = career.schoolRecords.find(r => r.key === key);
+    if (!better(result.value, old?.value, result.eventId)) return false;
+    const record = { key, recordKey, eventId: result.eventId, gender: result.gender, value: result.value, athleteId: result.athleteId, athleteName: result.athleteName, year: meet.year, week: meet.week, meetId: meet.id, meetName: meet.name, mode: meet.mode || 'normal', ...(result.hurdleHeight ? { hurdleHeight: result.hurdleHeight } : {}), ...(result.members ? { members: copy(result.members), athleteIds: [...result.athleteIds] } : {}) };
+    career.schoolRecords = [record, ...career.schoolRecords.filter(r => r.key !== key)];
+    return true;
+  }
+  function careerSeasonSummary(season, partial = false) {
+    return { year: season.year, mode: season.mode, goalId: partial ? null : season.goalId, achieved: !partial && season.goalRewarded, reward: !partial && season.goalRewarded ? CAREER_GOALS.find(g => g.id === season.goalId).reward : 0, medals: { ...season.stats.medals }, personalBests: season.stats.personalBests, meetCount: season.stats.meetCount, interhighWins: season.stats.interhighWins, partial };
+  }
+  function makeCareer(state) {
+    const career = { version: 1, startedYear: state.year, season: freshCareerSeason(state.year), schoolRecords: [], alumni: [], seasons: [], lifetime: { completedSeasons: state.year - 1, goalsAchieved: 0, interhighTitles: 0, currentStreak: 0, bestStreak: 0, graduates: Math.min(MAX_COUNT, Math.max(0, state.year - 3) * 12), lastTitleYear: null }, migrated: state.year > 1 || state.week > 1 || state.history.length > 0 };
+    const years = new Map();
+    for (const meet of [...state.history].reverse()) {
+      let season = years.get(meet.year);
+      if (!season) { season = freshCareerSeason(meet.year, 'personalBests', meet.mode || 'normal'); years.set(meet.year, season); }
+      countCareerMeet(season.stats, meet);
+      for (const result of meet.results) registerSchoolRecord(career, meet, result);
+    }
+    const recovered = [...years.values()].sort((a,b) => a.year-b.year);
+    let streak = 0, lastWin = null;
+    for (const season of recovered) {
+      if (season.year === state.year) { career.season.stats = season.stats; career.season.mode = season.mode; }
+      else career.seasons.unshift(careerSeasonSummary(season, true));
+      if (season.stats.interhighWins) {
+        streak = lastWin === season.year - 1 ? streak + 1 : 1; lastWin = season.year;
+        career.lifetime.interhighTitles++; career.lifetime.bestStreak = Math.max(career.lifetime.bestStreak, streak);
+      }
+    }
+    career.seasons.length = Math.min(career.seasons.length, 30);
+    career.lifetime.lastTitleYear = lastWin;
+    const latestInterhighYear = state.completedMeets.includes('nationals') ? state.year : state.year - 1;
+    career.lifetime.currentStreak = lastWin === latestInterhighYear ? streak : 0;
+    return career;
+  }
+  function ensureCareer(state) { if (!state.career) state.career = makeCareer(state); return state.career; }
+  function getCareer(state) {
+    const career = copy(state.career || makeCareer(state));
+    return { ...career, goal: careerGoalProgress(career.season), mode: { ...CAREER_MODES.find(m => m.id === career.season.mode) }, canChangeGoal: state.week === 1 && !career.season.goalRewarded, canChangeMode: state.week === 1 && !career.season.goalRewarded };
+  }
+  function chooseSeasonGoal(state, goalId) {
+    if (!validState(state) || !CAREER_GOALS.some(g => g.id === goalId)) return fail('年度目標が正しくありません。');
+    if (!getCareer(state).canChangeGoal) return fail('年度目標を選べるのは4月1週です。');
+    ensureCareer(state).season.goalId = goalId;
+    return { ok: true, message: '今年の目標を「' + CAREER_GOALS.find(g => g.id === goalId).name + '」にしました。' };
+  }
+  function setSeasonMode(state, modeId) {
+    if (!validState(state) || !CAREER_MODES.some(m => m.id === modeId)) return fail('大会モードが正しくありません。');
+    if (!getCareer(state).canChangeMode) return fail('大会モードを選べるのは4月1週です。');
+    ensureCareer(state).season.mode = modeId;
+    return { ok: true, message: '今年は「' + CAREER_MODES.find(m => m.id === modeId).name + '」で挑みます。' };
+  }
+  function settleCareerGoal(state) {
+    const career = ensureCareer(state), goal = careerGoalProgress(career.season);
+    if (!goal.achieved || career.season.goalRewarded) return { reward: 0, message: '' };
+    career.season.goalRewarded = true; career.season.goalAchievedWeek = state.week;
+    career.lifetime.goalsAchieved = safeAdd(career.lifetime.goalsAchieved, 1);
+    state.money = safeAdd(state.money, goal.reward);
+    return { reward: goal.reward, message: '年度目標「' + goal.name + '」達成！ 活動支援金 +' + goal.reward.toLocaleString('ja-JP') + '円。' };
+  }
+  function recordCareerMeet(state, meet, results, summary) {
+    const career = ensureCareer(state), completed = { ...meet, year: state.year, mode: career.season.mode, results };
+    let records = 0;
+    for (const result of results) { result.schoolRecord = registerSchoolRecord(career, completed, result); if (result.schoolRecord) records++; }
+    countCareerMeet(career.season.stats, completed);
+    if (meet.id === 'nationals') {
+      if (career.season.stats.interhighWins) {
+        career.lifetime.interhighTitles = safeAdd(career.lifetime.interhighTitles, 1);
+        career.lifetime.currentStreak = career.lifetime.lastTitleYear === state.year - 1 ? safeAdd(career.lifetime.currentStreak, 1) : 1;
+        career.lifetime.lastTitleYear = state.year;
+        career.lifetime.bestStreak = Math.max(career.lifetime.bestStreak, career.lifetime.currentStreak);
+      } else career.lifetime.currentStreak = 0;
+    }
+    const settlement = settleCareerGoal(state);
+    summary.careerReward = settlement.reward;
+    const messages = [];
+    if (records) messages.push('学校新記録 ' + records + '種目！');
+    if (settlement.message) messages.push(settlement.message);
+    summary.careerMessage = messages.join(' ');
+    if (summary.careerMessage) addLog(state, summary.careerMessage);
+  }
+  function finishCareerYear(state, report) {
+    const career = ensureCareer(state), graduates = state.athletes.filter(a => a.grade === 3);
+    // A legacy save may recover an achieved goal after its final meet. Settle it
+    // before archiving, so the displayed achievement never disappears unpaid.
+    const settlement = settleCareerGoal(state);
+    if (settlement.reward) { report.income += settlement.reward; report.balance += settlement.reward; report.events.push(settlement.message); }
+    career.seasons.unshift(careerSeasonSummary(career.season)); career.seasons.length = Math.min(career.seasons.length, 30);
+    career.alumni.unshift(...graduates.map(a => ({ id: a.id, name: a.name, gender: a.gender, event: a.event, trait: a.trait, color: a.color, graduationYear: state.year, stats: { ...a.stats }, bestBySpec: copy(a.bestBySpec) })));
+    career.alumni.length = Math.min(career.alumni.length, 60);
+    career.lifetime.completedSeasons = safeAdd(career.lifetime.completedSeasons, 1);
+    career.lifetime.graduates = safeAdd(career.lifetime.graduates, graduates.length);
+    if (!career.season.stats.interhighWins) career.lifetime.currentStreak = 0;
+    career.season = freshCareerSeason(state.year + 1, career.season.goalId, career.season.mode);
+  }
   function makeAthlete(state, options = {}) {
     const serial = state.nextAthleteId++, gender = options.gender || (serial % 2 ? 'boys' : 'girls'), grade = options.grade ?? 1;
     const pool = INDIVIDUAL_EVENTS.filter(e => !e.gender || e.gender === gender), eventId = options.event || pool[Math.floor(random(state) * pool.length)].id;
@@ -121,6 +255,7 @@
     const names = { boys: ['橘 翔太', '宮本 陸', '田辺 悠', '北村 蓮', '藤原 湊', '遠藤 大和'], girls: ['水野 葵', '桜井 凛', '小川 美咲', '高橋 結衣', '森 陽菜', '石川 紬'] };
     for (const gender of ['boys', 'girls']) ['100m', '400m', '1500m', gender === 'boys' ? '110mh' : '100mh', 'longjump', 'highjump'].forEach((event, i) => state.athletes.push(makeAthlete(state, { gender, event, name: names[gender][i], base: 37 + (i % 3) * 2, birthMonth: [5, 8, 1, 10, 3, 7][i] })));
     state.candidates = generateCandidates(state); refreshCards(state);
+    state.career = makeCareer(state);
     addLog(state, '新設・青葉高校陸上部、始動！ 1年生の男子6名・女子6名で、5月1週の地区予選を目指す。');
     return state;
   }
@@ -237,6 +372,7 @@
     change.energyChange = round(athlete.energy - before); return change;
   }
   function rollYear(state, report) {
+    finishCareerYear(state, report);
     report.graduated = state.athletes.filter(a => a.grade === 3).map(a => a.name);
     state.athletes = state.athletes.filter(a => a.grade < 3); state.athletes.forEach(a => { a.grade++; a.energy = 100; a.injury = 0; a.morale = Math.max(a.morale, 80); });
     state.year++; state.week = 1; state.qualification = freshQualification(); state.completedMeets = []; state.pendingMeet = null; state.pendingMeets = []; state.competedThisWeek = []; report.newcomers = [];
@@ -245,7 +381,7 @@
       for (let i = 0; i < 6; i++) { const athlete = committed[i] ? JSON.parse(JSON.stringify(committed[i])) : makeAthlete(state,{gender}); athlete.grade = 1; athlete.energy = 100; athlete.morale = 85; athlete.injury = 0; delete athlete.cost; delete athlete.note; state.athletes.push(athlete); report.newcomers.push(athlete); }
     }
     state.scouted = []; state.recruitedIds = []; state.candidates = generateCandidates(state);
-    const grant = 110000 + state.reputation * 200; state.money += grant; report.income += grant; report.balance += grant; state.spirit = clamp(state.spirit + 8, 0, 100);
+    const grant = 110000 + state.reputation * 200; state.money = safeAdd(state.money, grant); report.income += grant; report.balance += grant; state.spirit = clamp(state.spirit + 8, 0, 100);
     if (report.graduated.length) report.events.push(report.graduated.length + '人が卒業。先輩の記録と思いを受け継ごう。');
     report.events.push('新年度！ 男子6名・女子6名の新入生が合流。活動補助金' + grant.toLocaleString('ja-JP') + '円。');
   }
@@ -253,12 +389,14 @@
     if (!validState(state)) return fail('部のデータを読み込めません。');
     if (state.pendingMeet) return fail('大会当日です。出場または見送りで大会を終えてください。');
     if (state.monthPlanPending) return fail('月初です。全員の月間育成方針を確認・決定してください。');
+    if (state.totalWeeks >= MAX_COUNT || (state.week === 48 && (state.year >= MAX_YEAR || state.nextAthleteId > MAX_COUNT - 18))) return fail('数値を正確に保存できる上限に達しました。セーブを書き出してください。');
     const card = state.practiceCards.find(c => c.id === state.selectedPracticeCard); if (!card || state.money < card.cost) return fail('選んだ練習カードの部費が足りません。');
+    ensureCareer(state);
     const beforeMonth = getCalendar(state).month, report = { title: '今週の練習報告', weekLabel: getCalendar(state).label, cardName: card.name, changes: [], income: 0, expenses: card.cost, balance: 0, events: [], graduated: [], newcomers: [], lines: [], monthChanged: false };
     report.changes = state.athletes.map(a => trainAthlete(state,a,card));
     report.income = Math.round(12500 + state.reputation * 55 + state.facilities.club * 2000); report.expenses += 2400 + state.athletes.length * 290 + Object.values(state.facilities).reduce((s,l) => s + l, 0) * 450;
-    report.balance = report.income - report.expenses; state.money = Math.max(0,state.money + report.balance); state.totalWeeks++; state.spirit = round(clamp(state.spirit + (card.spirit || 0) + (state.intensity === 'hard' ? -.5 : .5), 15, 100));
-    if (random(state) < .13) { const type = Math.floor(random(state) * 3); if (type === 0) { state.money += 12000; report.income += 12000; report.balance += 12000; report.events.push('地域の応援で活動支援！ 部費 +12,000円。'); } else if (type === 1) { state.spirit = clamp(state.spirit + 6, 0, 100); report.events.push('仲間同士で励まし合う。チームの士気 +6。'); } else { state.athletes.forEach(a => { a.energy = clamp(a.energy + 7, 0, 100); }); report.events.push('保護者からお弁当の差し入れ。全員の体力 +7。'); } }
+    report.balance = report.income - report.expenses; state.money = Math.max(0,safeAdd(state.money, report.balance)); state.totalWeeks++; state.spirit = round(clamp(state.spirit + (card.spirit || 0) + (state.intensity === 'hard' ? -.5 : .5), 15, 100));
+    if (random(state) < .13) { const type = Math.floor(random(state) * 3); if (type === 0) { state.money = safeAdd(state.money, 12000); report.income += 12000; report.balance += 12000; report.events.push('地域の応援で活動支援！ 部費 +12,000円。'); } else if (type === 1) { state.spirit = clamp(state.spirit + 6, 0, 100); report.events.push('仲間同士で励まし合う。チームの士気 +6。'); } else { state.athletes.forEach(a => { a.energy = clamp(a.energy + 7, 0, 100); }); report.events.push('保護者からお弁当の差し入れ。全員の体力 +7。'); } }
     if (state.week === 48) rollYear(state,report); else state.week++;
     state.competedThisWeek = []; refreshCards(state); report.monthChanged = beforeMonth !== getCalendar(state).month; state.monthPlanPending = report.monthChanged;
     if (report.monthChanged) report.events.push(getCalendar(state).monthName + 'の育成方針を決めよう。');
@@ -284,12 +422,14 @@
     return { ok:true, selected };
   }
   function finishMeet(state, meet, results, summary) {
-    state.completedMeets.push(meet.id); state.lastMeet = { id: meet.id, name: meet.name, year: state.year, week: state.week, indoor: meet.kind === 'indoor', kind: meet.kind, ...(meet.category ? { category: meet.category } : {}), official: summary.official, results, summary };
+    recordCareerMeet(state, meet, results, summary);
+    state.completedMeets.push(meet.id); state.lastMeet = { id: meet.id, name: meet.name, year: state.year, week: state.week, mode: state.career.season.mode, indoor: meet.kind === 'indoor', kind: meet.kind, ...(meet.category ? { category: meet.category } : {}), official: summary.official, results, summary };
     state.history.unshift(JSON.parse(JSON.stringify(state.lastMeet))); state.history.length = Math.min(state.history.length,60); state.pendingMeet = state.pendingMeets.shift() || null; addLog(state,meet.name + '：' + summary.message);
     return { ok:true,results,summary,message:summary.message,meet:state.lastMeet };
   }
   function runMeet(state, entries, tactic = 'balanced') {
     if (!validState(state)) return fail('部のデータを読み込めません。'); if (!state.pendingMeet) return fail('今日は大会当日ではありません。'); if (!['balanced','aggressive','steady'].includes(tactic)) return fail('作戦が正しくありません。'); const checked = validateEntries(state,entries); if (!checked.ok) return checked;
+    const career = ensureCareer(state), careerMode = CAREER_MODES.find(m => m.id === career.season.mode);
     const meet = state.pendingMeet, divisions = getMeetEvents(state,meet), results = [], summary = { title: meet.name + ' 結果', message: '', prize: 0, reputation: 0, gold: 0, silver: 0, bronze: 0, qualified: false, stageId: meet.id, official: false };
     if (meet.next) state.qualification[meet.next] = {};
     for (const [key,entry] of checked.selected) {
@@ -301,10 +441,11 @@
       const name = division.teamSize ? state.schoolName + ' ' + GENDER_NAMES[division.gender] + 'リレー' : athlete.name;
       const members = division.teamSize ? athletes.map((a,i) => ({athleteId:a.id,name:a.name,color:a.color,gender:a.gender,leg:i+1})) : null;
       const participants = [{athleteId:athlete.id,name,school:state.schoolName,value,formatted:formatResult(value,eventId),isPlayer:true,...(members ? {members,athleteIds:[...entry]} : {})}];
-      for (let i=0;i<7;i++) { const r = (official ? meet.rating : Math.max(48,meet.rating-13)) + (i-3)*2 + (random(state)-.5)*5, v = ratingToResult(r,eventId,division.gender,division.hurdleHeight); participants.push({athleteId:'rival-'+i,name:RIVAL_SCHOOLS[i],school:RIVAL_SCHOOLS[i],value:v,formatted:formatResult(v,eventId),isPlayer:false}); }
+      for (let i=0;i<7;i++) { const r = (official ? meet.rating : Math.max(48,meet.rating-13)) + (meet.level === 4 ? careerMode.nationalBonus : careerMode.rivalBonus) + (i-3)*2 + (random(state)-.5)*5, v = ratingToResult(r,eventId,division.gender,division.hurdleHeight); participants.push({athleteId:'rival-'+i,name:RIVAL_SCHOOLS[i],school:RIVAL_SCHOOLS[i],value:v,formatted:formatResult(v,eventId),isPlayer:false}); }
       participants.sort((a,b) => division.lowerBetter ? a.value-b.value : b.value-a.value); participants.forEach((p,i) => {p.rank = i && p.value === participants[i-1].value ? participants[i-1].rank : i+1;});
       const rank = participants.find(p => p.isPlayer).rank, book = division.teamSize ? state.teamBest[division.gender] : athlete.best, newBest = better(value,book[eventId],eventId); if (newBest) book[eventId] = value;
-      if (!division.teamSize) { if (better(value,athlete.bestBySpec[division.recordKey],eventId)) athlete.bestBySpec[division.recordKey]=value; if (official) {
+      const personalBest = !division.teamSize && better(value,athlete.bestBySpec[division.recordKey],eventId);
+      if (!division.teamSize) { if (personalBest) athlete.bestBySpec[division.recordKey]=value; if (official) {
         const calendarYear = getCalendar(state).calendarYear, old = athlete.officialBest[division.recordKey];
         athlete.officialRecords ||= {}; const yearly = athlete.officialRecords[division.recordKey] ||= {};
         if (old && old.calendarYear >= calendarYear - 1 && yearly[old.calendarYear] == null) yearly[old.calendarYear] = old.value;
@@ -313,14 +454,14 @@
         athlete.officialBest[division.recordKey] = Object.entries(yearly).map(([year,v]) => ({value:v,calendarYear:Number(year)})).sort((a,b) => division.lowerBetter ? a.value-b.value : b.value-a.value)[0];
       } }
       const qualified = official && rank <= 3 && !!meet.next, medal = official && rank <= 3 ? ['gold','silver','bronze'][rank-1] : null;
-      if (medal) {state.medals[medal]++;summary[medal]++;} if (qualified) { state.qualification[meet.next][key] = division.teamSize ? true : [athlete.id]; summary.qualified = true; }
+      if (medal) {state.medals[medal] = safeAdd(state.medals[medal], 1);summary[medal]++;} if (qualified) { state.qualification[meet.next][key] = division.teamSize ? true : [athlete.id]; summary.qualified = true; }
       const prize = Math.round((rank === 1 ? meet.prize : rank === 2 ? meet.prize*.65 : rank===3 ? meet.prize*.4 : 2500) * (official ? 1 : .25)); summary.prize += prize; summary.reputation += official ? (rank === 1 ? 4 : rank <=3 ? 2 : 1) * meet.level : 0;
       for (const member of athletes) {member.energy = round(clamp(member.energy - (tactic==='aggressive'?19:tactic==='steady'?10:14),0,100)); member.morale=clamp(member.morale+(rank<=3?6:rank<=5?1:-2),0,100); if (meet.kind !== 'school' && !state.competedThisWeek.includes(member.id)) state.competedThisWeek.push(member.id);}
-      results.push({eventId,divisionKey:key,eventName:division.name,name,athleteId:athlete.id,athleteName:name,gender:division.gender,category:division.category,indoor:meet.kind==='indoor',...(division.hurdleHeight?{hurdleHeight:division.hurdleHeight}:{}),value,formatted:formatResult(value,eventId),rank,participants,qualified,newBest,medal,prize,tactic,official,...(members?{members,athleteIds:[...entry]}:{})});
+      results.push({eventId,divisionKey:key,eventName:division.name,name,athleteId:athlete.id,athleteName:name,gender:division.gender,category:division.category,indoor:meet.kind==='indoor',...(division.hurdleHeight?{hurdleHeight:division.hurdleHeight}:{}),value,formatted:formatResult(value,eventId),rank,participants,qualified,newBest,personalBest,medal,prize,tactic,official,...(members?{members,athleteIds:[...entry]}:{})});
     }
     if (meet.id==='district'&&summary.qualified) state.goal.districtQualified=true; if (meet.id==='prefecture'&&summary.qualified) state.goal.prefectureQualified=true; if (meet.id==='regional'&&summary.qualified) state.goal.nationalsQualified=true;
     if (meet.id==='nationals'&&summary.gold>0) {state.goal.nationalsWon=true;if(state.goal.wonYear==null)state.goal.wonYear=state.year;}
-    state.money+=summary.prize; state.reputation=clamp(state.reputation+summary.reputation,0,999);state.spirit=clamp(state.spirit+(summary.qualified||summary.gold?6:-1),15,100);
+    state.money=safeAdd(state.money,summary.prize); state.reputation=clamp(state.reputation+summary.reputation,0,999);state.spirit=clamp(state.spirit+(summary.qualified||summary.gold?6:-1),15,100);
     summary.message = meet.id==='nationals'&&summary.gold ? 'インターハイ優勝！ 新しい部の歴史に、全国の金メダルを刻んだ。' : summary.qualified ? '通過した選手・リレーが'+MEETS.find(m=>m.id===meet.next).name+'へ！' : !summary.official ? 'オープン記録会で経験を積んだ。記録は参考記録となり、参加標準には使えません。' : summary.gold ? '金メダル獲得！ 次の舞台へつながる大きな一歩。' : '大会を終えました。記録と適性を振り返り、次の目標へ。';
     return finishMeet(state,meet,results,summary);
   }
@@ -331,9 +472,9 @@
       const d=typeof input==='string'?JSON.parse(input):input,n=(v,min,max,int=false)=>typeof v==='number'&&Number.isFinite(v)&&v>=min&&v<=max&&(!int||Number.isInteger(v)),obj=v=>v&&typeof v==='object'&&!Array.isArray(v),str=(v,max=100)=>typeof v==='string'&&v.length>0&&v.length<=max;
       // JSONB may reorder object keys; compare exact structure while preserving array order.
       const sameValue=(a,b)=>a===b||(a!==null&&b!==null&&typeof a==='object'&&typeof b==='object'&&Array.isArray(a)===Array.isArray(b)&&(!Array.isArray(a)||a.length===b.length)&&Object.keys(a).length===Object.keys(b).length&&Object.keys(a).every(key=>Object.prototype.hasOwnProperty.call(b,key)&&sameValue(a[key],b[key])));
-      if(!obj(d)||d.version!==VERSION||!n(d.year,1,10000,true)||!n(d.week,1,48,true)||!n(d.money,0,1e12)||!n(d.reputation,0,999)||!n(d.spirit,0,100)||!n(d.rng,1,4294967295,true)||!n(d.nextAthleteId,1,1e9,true)||!n(d.totalWeeks,0,1e9,true)||!str(d.schoolName,30)||!['easy','normal','hard'].includes(d.intensity))return false;
+      if(!obj(d)||d.version!==VERSION||!n(d.year,1,MAX_YEAR,true)||!n(d.week,1,48,true)||!n(d.money,0,MAX_COUNT)||!n(d.reputation,0,999)||!n(d.spirit,0,100)||!n(d.rng,1,4294967295,true)||!n(d.nextAthleteId,1,MAX_COUNT,true)||!n(d.totalWeeks,0,MAX_COUNT,true)||!str(d.schoolName,30)||!['easy','normal','hard'].includes(d.intensity))return false;
       if(!obj(d.facilities)||Object.keys(d.facilities).length!==4||!FACILITIES.every(f=>n(d.facilities[f.id],1,5,true)))return false;
-      const validId=id=>typeof id==='string'&&/^athlete-[1-9][0-9]*$/.test(id)&&id.length<40,record=(v,id)=>!!findEvent(id)&&n(v,.01,findEvent(id).unit==='m'?30:1500),spec=key=>{const parts=key.split(':');return !!findEvent(parts[0])&&(parts.length===1?!['110mh','100mh','60mh'].includes(parts[0]):parts.length===2&&['110mh','100mh','60mh'].includes(parts[0])&&['0.762','0.838','0.991','1.067'].includes(parts[1]));};
+      const validId=id=>typeof id==='string'&&/^athlete-[1-9][0-9]*$/.test(id)&&n(Number(id.slice(8)),1,MAX_COUNT,true),record=(v,id)=>!!findEvent(id)&&n(v,.01,findEvent(id).unit==='m'?30:1500),spec=key=>{const parts=key.split(':');return !!findEvent(parts[0])&&(parts.length===1?!['110mh','100mh','60mh'].includes(parts[0]):parts.length===2&&['110mh','100mh','60mh'].includes(parts[0])&&['0.762','0.838','0.991','1.067'].includes(parts[1]));};
       const athleteSpec=(key,a)=>{if(!spec(key))return false;const [id,height]=key.split(':'),e=findEvent(id);if(e.teamSize||(e.gender&&e.gender!==a.gender))return false;if(!height)return true;return (a.gender==='boys'?['0.991','1.067']:['0.762','0.838']).includes(height);};
       const athlete=(a,junior=false)=>obj(a)&&validId(a.id)&&str(a.name,40)&&['boys','girls'].includes(a.gender)&&n(a.grade,junior?0:1,junior?0:3,true)&&n(a.birthMonth,1,12,true)&&n(a.birthYear,START_YEAR+d.year-22,START_YEAR+d.year-12,true)&&a.birthYear===START_YEAR+d.year-1-15-a.grade+(a.birthMonth<=3?1:0)&&INDIVIDUAL_EVENTS.some(e=>e.id===a.event&&(!e.gender||e.gender===a.gender))&&a.specialty===a.event&&str(a.trait,40)&&TRAITS.some(t=>t.name===a.trait)&&str(a.traitDescription,300)&&/^#[0-9a-fA-F]{6}$/.test(a.color)&&n(a.potential,.5,2)&&n(a.energy,0,100)&&n(a.morale,0,100)&&n(a.injury,0,3,true)&&TRAININGS.some(t=>t.id===a.training)&&FOCUSES.some(f=>f.id===a.focus)&&obj(a.stats)&&Object.keys(a.stats).length===7&&STAT_KEYS.every(k=>n(a.stats[k],0,100))&&obj(a.best)&&Object.entries(a.best).every(([id,v])=>record(v,id)&&!findEvent(id).teamSize&&(!findEvent(id).gender||findEvent(id).gender===a.gender))&&obj(a.bestBySpec)&&Object.entries(a.bestBySpec).every(([key,v])=>athleteSpec(key,a)&&record(v,key.split(':')[0]))&&obj(a.officialBest)&&Object.entries(a.officialBest).every(([key,v])=>athleteSpec(key,a)&&obj(v)&&record(v.value,key.split(':')[0])&&n(v.calendarYear,START_YEAR,getCalendar(d).calendarYear,true))&&(a.officialRecords===undefined||(obj(a.officialRecords)&&Object.entries(a.officialRecords).every(([key,years])=>athleteSpec(key,a)&&obj(years)&&Object.entries(years).every(([year,value])=>n(Number(year),START_YEAR,getCalendar(d).calendarYear,true)&&record(value,key.split(':')[0])))));
       if(!Array.isArray(d.athletes)||d.athletes.length<12||d.athletes.length>36||!d.athletes.every(a=>athlete(a))||new Set(d.athletes.map(a=>a.id)).size!==d.athletes.length)return false;
@@ -348,15 +489,38 @@
       const due=MEETS.filter(m=>m.week===d.week&&!d.completedMeets.includes(m.id));if(!Array.isArray(d.pendingMeets))return false;const queue=d.pendingMeet?[d.pendingMeet,...d.pendingMeets]:d.pendingMeets;if(queue.length!==due.length||queue.some((m,i)=>!obj(m)||Object.entries(due[i]).some(([key,value])=>m[key]!==value)))return false;if(!d.pendingMeet&&d.pendingMeets.length)return false;
       if(!Array.isArray(d.competedThisWeek)||new Set(d.competedThisWeek).size!==d.competedThisWeek.length||!d.competedThisWeek.every(id=>d.athletes.some(a=>a.id===id))||typeof d.monthPlanPending!=='boolean')return false;
       if(!Array.isArray(d.practiceCards)||d.practiceCards.length!==3||new Set(d.practiceCards.map(c=>c.id)).size!==3||!d.practiceCards.every(c=>{const ref=PRACTICE_CARDS.find(p=>p.id===c.id);return ref&&sameValue(c,ref);})||!d.practiceCards.some(c=>c.id===d.selectedPracticeCard))return false;
-      if(!obj(d.medals)||!['gold','silver','bronze'].every(k=>n(d.medals[k],0,1e9,true))||!obj(d.goal)||!['districtQualified','prefectureQualified','nationalsQualified','nationalsWon'].every(k=>typeof d.goal[k]==='boolean')||!(d.goal.wonYear===null||n(d.goal.wonYear,1,d.year,true)))return false;
+      if(!obj(d.medals)||!['gold','silver','bronze'].every(k=>n(d.medals[k],0,MAX_COUNT,true))||!obj(d.goal)||!['districtQualified','prefectureQualified','nationalsQualified','nationalsWon'].every(k=>typeof d.goal[k]==='boolean')||!(d.goal.wonYear===null||n(d.goal.wonYear,1,d.year,true)))return false;
       if(!Array.isArray(d.logs)||d.logs.length>100||!d.logs.every(l=>obj(l)&&n(l.year,1,d.year,true)&&n(l.week,1,48,true)&&str(l.text,500)))return false;
       const validResult=r=>obj(r)&&findEvent(r.eventId)&&(!findEvent(r.eventId).gender||findEvent(r.eventId).gender===r.gender)&&['boys','girls'].includes(r.gender)&&r.divisionKey===r.gender+':'+r.eventId&&validId(r.athleteId)&&str(r.athleteName,80)&&record(r.value,r.eventId)&&n(r.rank,1,8,true)&&typeof r.qualified==='boolean'&&typeof r.newBest==='boolean'&&typeof r.official==='boolean'&&[null,'gold','silver','bronze'].includes(r.medal)&&str(r.formatted,30)&&n(r.prize,0,1e9)&&Array.isArray(r.participants)&&r.participants.length===8&&r.participants.every(p=>obj(p)&&str(p.name,80)&&str(p.school,40)&&record(p.value,r.eventId)&&n(p.rank,1,8,true)&&typeof p.isPlayer==='boolean')&&r.participants.filter(p=>p.isPlayer).length===1&&r.participants.some(p=>p.isPlayer&&p.athleteId===r.athleteId&&p.value===r.value&&p.rank===r.rank)&&(r.eventId!=='relay'||(Array.isArray(r.athleteIds)&&r.athleteIds.length===4&&new Set(r.athleteIds).size===4&&r.athleteIds.every(validId)&&Array.isArray(r.members)&&r.members.length===4&&r.members.every((m,i)=>m.athleteId===r.athleteIds[i]&&m.leg===i+1&&str(m.name,40)&&/^#[0-9a-fA-F]{6}$/.test(m.color)&&m.gender===r.gender)));
       const validMeet=m=>obj(m)&&MEETS.some(ref=>ref.id===m.id&&ref.week===m.week&&m.indoor===(ref.kind==='indoor')&&m.kind===ref.kind)&&str(m.name,80)&&n(m.year,1,d.year,true)&&Array.isArray(m.results)&&m.results.length<=20&&new Set(m.results.map(r=>r.divisionKey)).size===m.results.length&&m.results.every(r=>validResult(r)&&getMeetEvents(d,m.id).some(div=>div.key===r.divisionKey&&div.name===r.eventName&&div.category===r.category&&div.hurdleHeight===r.hurdleHeight)&&r.indoor===m.indoor)&&obj(m.summary)&&str(m.summary.title,120)&&str(m.summary.message,500)&&['prize','reputation','gold','silver','bronze'].every(k=>n(m.summary[k],0,1e9))&&typeof m.summary.qualified==='boolean'&&typeof m.summary.official==='boolean';
       if(!Array.isArray(d.history)||d.history.length>60||!d.history.every(validMeet)||(d.lastMeet!==null&&!validMeet(d.lastMeet)))return false;
+      const validMode=id=>CAREER_MODES.some(mode=>mode.id===id), validGoal=id=>CAREER_GOALS.some(goal=>goal.id===id);
+      if([...d.history,...(d.lastMeet?[d.lastMeet]:[])].some(meet=>(meet.mode!==undefined&&!validMode(meet.mode))||(meet.summary.careerReward!==undefined&&!n(meet.summary.careerReward,0,100000,true))||(meet.summary.careerMessage!==undefined&&(typeof meet.summary.careerMessage!=='string'||meet.summary.careerMessage.length>500))||meet.results.some(r=>(r.schoolRecord!==undefined&&typeof r.schoolRecord!=='boolean')||(r.personalBest!==undefined&&typeof r.personalBest!=='boolean'))))return false;
+      if(d.career!==undefined){
+        const c=d.career, medals=m=>obj(m)&&Object.keys(m).length===3&&['gold','silver','bronze'].every(k=>n(m[k],0,198,true));
+        const divisionKey=key=>typeof key==='string'&&['boys','girls'].some(g=>EVENTS.some(e=>(!e.gender||e.gender===g)&&key===g+':'+e.id));
+        const uniqueArray=(values,max,valid)=>Array.isArray(values)&&values.length<=max&&new Set(values).size===values.length&&values.every(valid);
+        const stats=s=>obj(s)&&['personalBests','interhighEntries','interhighWins','indoorPodiums'].every(k=>n(s[k],0,198,true))&&n(s.meetCount,0,11,true)&&medals(s.medals)&&s.interhighWins<=s.interhighEntries&&uniqueArray(s.podiumDivisions,24,divisionKey)&&uniqueArray(s.relayPodiums,2,g=>['boys','girls'].includes(g))&&s.relayPodiums.every(g=>s.podiumDivisions.includes(g+':relay'));
+        if(!obj(c)||c.version!==1||!n(c.startedYear,1,d.year,true)||typeof c.migrated!=='boolean'||!obj(c.season)||c.season.year!==d.year||!validGoal(c.season.goalId)||!validMode(c.season.mode)||!stats(c.season.stats)||typeof c.season.goalRewarded!=='boolean'||!(c.season.goalRewarded?n(c.season.goalAchievedWeek,1,d.week,true)&&careerGoalProgress(c.season).achieved:c.season.goalAchievedWeek===null))return false;
+        const lifetime=c.lifetime;
+        if(!obj(lifetime)||!['completedSeasons','goalsAchieved','interhighTitles','currentStreak','bestStreak','graduates'].every(k=>n(lifetime[k],0,MAX_COUNT,true))||lifetime.completedSeasons!==d.year-1||lifetime.goalsAchieved>d.year||lifetime.interhighTitles>d.year||lifetime.currentStreak>lifetime.bestStreak||lifetime.bestStreak>lifetime.interhighTitles||!(lifetime.lastTitleYear===null?lifetime.interhighTitles===0:n(lifetime.lastTitleYear,1,d.year,true)&&lifetime.interhighTitles>0))return false;
+        const schoolRecord=r=>{
+          if(!obj(r)||!str(r.key,60)||!str(r.recordKey,40)||!findEvent(r.eventId)||!['boys','girls'].includes(r.gender)||r.key!==r.gender+':'+r.recordKey||r.recordKey!==getRecordKey(r.eventId,r.hurdleHeight)||!record(r.value,r.eventId)||!validId(r.athleteId)||!str(r.athleteName,80)||!n(r.year,1,d.year,true)||!n(r.week,1,r.year===d.year?d.week:48,true)||!validMode(r.mode))return false;
+          const meet=MEETS.find(m=>m.id===r.meetId);if(!meet||meet.name!==r.meetName||meet.week!==r.week||!getMeetEvents(d,meet).some(div=>div.key===r.gender+':'+r.eventId&&div.recordKey===r.recordKey&&div.hurdleHeight===r.hurdleHeight))return false;
+          if(r.eventId==='relay')return uniqueArray(r.athleteIds,4,validId)&&r.athleteIds.length===4&&r.athleteId===r.athleteIds[0]&&Array.isArray(r.members)&&r.members.length===4&&r.members.every((m,i)=>obj(m)&&m.athleteId===r.athleteIds[i]&&str(m.name,40)&&m.gender===r.gender&&m.leg===i+1&&/^#[0-9a-fA-F]{6}$/.test(m.color));
+          return r.members===undefined&&r.athleteIds===undefined;
+        };
+        if(!Array.isArray(c.schoolRecords)||c.schoolRecords.length>40||new Set(c.schoolRecords.map(r=>r.key)).size!==c.schoolRecords.length||!c.schoolRecords.every(schoolRecord))return false;
+        const alumnus=a=>obj(a)&&validId(a.id)&&!d.athletes.some(active=>active.id===a.id)&&str(a.name,40)&&['boys','girls'].includes(a.gender)&&INDIVIDUAL_EVENTS.some(e=>e.id===a.event&&(!e.gender||e.gender===a.gender))&&TRAITS.some(t=>t.name===a.trait)&&/^#[0-9a-fA-F]{6}$/.test(a.color)&&n(a.graduationYear,1,d.year-1,true)&&obj(a.stats)&&Object.keys(a.stats).length===7&&STAT_KEYS.every(k=>n(a.stats[k],0,100))&&obj(a.bestBySpec)&&Object.entries(a.bestBySpec).every(([key,value])=>athleteSpec(key,a)&&record(value,key.split(':')[0]));
+        if(!Array.isArray(c.alumni)||c.alumni.length>60||new Set(c.alumni.map(a=>a.id)).size!==c.alumni.length||!c.alumni.every(alumnus)||c.alumni.some((a,i)=>i>0&&a.graduationYear>c.alumni[i-1].graduationYear))return false;
+        const season=s=>obj(s)&&n(s.year,1,d.year-1,true)&&validMode(s.mode)&&typeof s.partial==='boolean'&&(s.partial?s.goalId===null:validGoal(s.goalId))&&typeof s.achieved==='boolean'&&n(s.reward,0,100000,true)&&(s.achieved?!s.partial&&s.reward===CAREER_GOALS.find(g=>g.id===s.goalId).reward:s.reward===0)&&medals(s.medals)&&n(s.personalBests,0,198,true)&&n(s.meetCount,0,11,true)&&n(s.interhighWins,0,18,true);
+        if(!Array.isArray(c.seasons)||c.seasons.length>30||new Set(c.seasons.map(s=>s.year)).size!==c.seasons.length||!c.seasons.every(season)||c.seasons.some((s,i)=>i>0&&s.year>=c.seasons[i-1].year))return false;
+      }
       if(d.lastReport!=null&&(!obj(d.lastReport)||!str(d.lastReport.title,100)||!Array.isArray(d.lastReport.changes)||!Array.isArray(d.lastReport.events)||!d.lastReport.events.every(s=>typeof s==='string')||!Array.isArray(d.lastReport.lines)||!d.lastReport.lines.every(s=>typeof s==='string')))return false;
       return true;
     }catch(_){return false;}
   }
-  const api={VERSION,START_YEAR,EVENTS,INDIVIDUAL_EVENTS,RELAY_LEGS,TRAININGS,FOCUSES,PRACTICE_CARDS,FACILITIES,MEETS,STAT_KEYS,STAT_NAMES,GENDER_NAMES,INDOOR_STANDARDS,createGame,getCalendar,getSchedule,getNextMeet,getMeetEvents,getEntryStatus,getEligibleAthletes,getRecordKey,getAge,advanceWeek,setTraining,setFocus,confirmMonthlyPlan,choosePracticeCard,setIntensity,upgradeFacility,recruitAthlete,scoutAthlete,getCandidates,runMeet,skipMeet,validateEntries,getAthleteRating,getSuitability,getRelayRating,predictResult,predictRelayResult,getDefaultTraining,formatResult,getFacilityCost,getSummary,validateSave};
+  const api={VERSION,START_YEAR,EVENTS,INDIVIDUAL_EVENTS,RELAY_LEGS,TRAININGS,FOCUSES,PRACTICE_CARDS,FACILITIES,MEETS,STAT_KEYS,STAT_NAMES,GENDER_NAMES,INDOOR_STANDARDS,CAREER_GOALS,CAREER_MODES,createGame,getCalendar,getSchedule,getNextMeet,getMeetEvents,getEntryStatus,getEligibleAthletes,getRecordKey,getAge,advanceWeek,setTraining,setFocus,confirmMonthlyPlan,choosePracticeCard,setIntensity,upgradeFacility,recruitAthlete,scoutAthlete,getCandidates,runMeet,skipMeet,validateEntries,getAthleteRating,getSuitability,getRelayRating,predictResult,predictRelayResult,getDefaultTraining,formatResult,getFacilityCost,getSummary,validateSave,getCareer,chooseSeasonGoal,setSeasonMode};
+  for(const name of ['setTraining','setFocus','confirmMonthlyPlan','choosePracticeCard','setIntensity','upgradeFacility','recruitAthlete','scoutAthlete']) { const action=api[name];api[name]=(state,...args)=>{const result=action(state,...args);if(result.ok)ensureCareer(state);return result;}; }
   root.TrackGame=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof globalThis!=='undefined'?globalThis:window);

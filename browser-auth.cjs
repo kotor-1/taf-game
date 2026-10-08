@@ -28,7 +28,7 @@ const secrets=new Set();
 const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const accountAction=(page,action)=>page.locator(`[data-account-action="${action}"]`).first();
 const gameAction=(page,action)=>page.locator(`[data-action="${action}"]`).first();
-const readSave=(page,account)=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)),account?accountKey(account):key);
+const readSave=(page,account)=>page.evaluate(key=>TrackSaveStore.decode(localStorage.getItem(key)),account?accountKey(account):key);
 const readFixture=async()=>{const data=JSON.parse(await fs.readFile(fixturePath,'utf8'));for(const account of data.accounts||[])if(account.password)secrets.add(account.password);return data;};
 async function updateFixture(fn){
   const fixture=await readFixture();fn(fixture);

@@ -96,11 +96,18 @@
       const headers={apikey:publishableKey,Accept:'application/json'};
       if(accessToken)headers.Authorization='Bearer '+accessToken;
       if(body!==undefined)headers['Content-Type']='application/json';
-      const response=await timedFetch(url+path,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});
-      let data;
-      try{data=await response.json();}catch{throw failure('network','サーバーの応答を読み込めませんでした。少し待ってからもう一度お試しください。');}
-      if(!response.ok)throw mapError({...data,status:response.status});
-      return data;
+      const controller=new AbortController();let timer;
+      const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(failure('network','通信が完了しませんでした。接続を確認してからもう一度お試しください。'));},timeoutMs);});
+      const work=(async()=>{
+        const response=await fetcher(url+path,{method,headers,body:body===undefined?undefined:JSON.stringify(body),signal:controller.signal});
+        let data;
+        try{data=await response.json();}catch{throw failure('network','サーバーの応答を読み込めませんでした。少し待ってからもう一度お試しください。');}
+        if(!response.ok)throw mapError({...data,status:response.status});
+        return data;
+      })();
+      // Headers can arrive while a long save body stalls. Keep the deadline in
+      // force until JSON is fully read, not just until fetch resolves headers.
+      try{return await Promise.race([work,timeout]);}finally{clearTimeout(timer);}
     }
     function checkIdentity(id,atEpoch){
       if(disposed||epoch!==atEpoch||!status.user||status.user.id!==id)

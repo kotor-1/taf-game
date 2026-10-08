@@ -68,6 +68,9 @@
     }
     function save(value){
       const c=active;
+      // Auth can change synchronously before the queued account-switch handler.
+      // Reject a stale account before touching that account's local save as well.
+      if(c.id&&!current(c))return false;
       if(!validate(value))return false;
       if(c.id&&['loading','choose','conflict','error'].includes(c.phase))return false;
       const ok=c.store.save(value);c.state=value;
@@ -81,7 +84,7 @@
       const c=active;
       if(!c.id)return c.store.save(c.state);
       if(!current(c))return false;
-      if(c.store.getStatus().conflict){c.phase='error';c.error={code:'local_save',message:'別のタブで保存された進行があります。再読み込みしてから同期してください。'};emit();return false;}
+      if(c.store.hasConflict()||c.store.getStatus().conflict){c.phase='error';c.error={code:'local_save',message:'別のタブで保存された進行があります。再読み込みしてから同期してください。'};emit();return false;}
       if(c.ready&&c.phase==='loading')await c.ready;
       if(!current(c)||['choose','conflict'].includes(c.phase))return false;
       if(c.writing)return c.writing;

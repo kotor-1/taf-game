@@ -88,3 +88,14 @@ test('JSONB reordering of an already committed offline change does not create a 
   x.sync.getState().schoolName='コミット済み応答欠落';x.sync.save(x.sync.getState());cloud.records.set('a',{data:reorder(copy(x.sync.getState())),revision:2,updatedAt:'2026-10-08T12:00:00.000Z'});x.sync.dispose();
   const second=S.create(x.options);t.after(()=>second.dispose());await second.init();assert.equal(second.getStatus().phase,'ready');assert.equal(second.getStatus().pending,false);assert.equal(second.getStatus().revision,2);assert.equal(second.getState().schoolName,'コミット済み応答欠落');assert.equal(cloud.calls.length,0);
 });
+test('auth changes reject stale local writes before the account-switch microtask runs',async t=>{
+  const cloud=makeCloud(user('a'));cloud.records.set('a',row('A高校'));cloud.records.set('b',row('B高校'));const x=setup({cloud});t.after(()=>x.sync.dispose());await x.sync.init();
+  const key=P.KEY+':account:a',original=x.data.get(key),stale=x.sync.getState();cloud.setUser(user('b'));stale.schoolName='旧アカウントへ混入';
+  assert.equal(x.sync.save(stale),false);assert.equal(x.data.get(key),original);await tick();await tick();assert.equal(x.sync.getState().schoolName,'B高校');assert.equal(cloud.calls.length,0);
+});
+test('flush checks actual local storage before sending even if the storage event is delayed',async t=>{
+  const cloud=makeCloud(user('a'));cloud.records.set('a',row('初期'));const x=setup({cloud});t.after(()=>x.sync.dispose());await x.sync.init();
+  x.sync.getState().schoolName='古いタブの未同期';x.sync.save(x.sync.getState());
+  x.data.set(P.KEY+':account:a',JSON.stringify(game('別タブで進行')));
+  assert.equal(await x.sync.flush(),false);assert.equal(cloud.calls.length,0);assert.equal(x.sync.getStatus().error.code,'local_save');
+});

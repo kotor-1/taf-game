@@ -20,7 +20,7 @@ const outputDirectory = process.env.QA_OUTPUT_DIR || os.tmpdir();
 const artifact = name => path.join(outputDirectory, name);
 const errors = [];
 const observedPages = new WeakSet();
-const readSave = page => page.evaluate(key => JSON.parse(localStorage.getItem(key)), saveKey);
+const readSave = page => page.evaluate(key => TrackSaveStore.decode(localStorage.getItem(key)), saveKey);
 const click = (page, action) => page.locator(`[data-action="${action}"]`).first().click();
 const navigate = (page, tab) => page.locator(`.nav-btn[data-page="${tab}"]`).click();
 async function close(page) {
@@ -125,7 +125,7 @@ async function checkPersistence(browser) {
   await click(page, 'save-settings');
   const updated = await readSave(page);
   assert.equal(updated.schoolName, '保存テスト高校');
-  assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)), backupKey), original);
+  assert.deepEqual(await page.evaluate(key => TrackSaveStore.decode(localStorage.getItem(key)), backupKey), original);
   await click(page, 'manual-save');
   assert.match(await page.locator('#toast').textContent(), /セーブしました/);
   assert.equal(await page.locator('[data-save-status]').first().getAttribute('data-save-state'), 'saved');

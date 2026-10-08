@@ -2,6 +2,20 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const P=require('./persistence.js');
 const E=require('./engine.js');
+const LZ=require('./vendor/lz-string-1.5.0.js');
+let matureTemplate;
+function matureGame(){
+  if(!matureTemplate){
+    const g=E.createGame(4);while(g.week<5){if(g.monthPlanPending)E.confirmMonthlyPlan(g);E.advanceWeek(g);}
+    const entries={},used=new Set();for(const d of E.getMeetEvents(g)){
+      if(d.teamSize)entries[d.key]=g.athletes.filter(a=>a.gender===d.gender).slice(0,4).map(a=>a.id);
+      else{const athlete=g.athletes.find(a=>a.gender===d.gender&&!used.has(a.id));if(athlete){entries[d.key]=athlete.id;used.add(athlete.id);}}
+    }
+    assert.equal(E.runMeet(g,entries,'steady').ok,true);
+    g.history=Array.from({length:60},()=>JSON.parse(JSON.stringify(g.lastMeet)));assert.equal(E.validateSave(g),true);matureTemplate=JSON.stringify(g);
+  }
+  return JSON.parse(matureTemplate);
+}
 function setup(initial={}){
   const data=new Map(Object.entries(initial));
   const storage={getItem:key=>data.get(key)??null,setItem:(key,value)=>data.set(key,String(value))};
@@ -64,4 +78,59 @@ test('account namespaces keep saves and backups separate from guest and other ac
   const accountGame=E.createGame();accountGame.schoolName='アカウント高校';account.save(accountGame);accountGame.schoolName='育成高校';account.save(accountGame);
   assert.equal(data.get(P.KEY),JSON.stringify(game));assert.equal(JSON.parse(data.get(key+'-backup')).schoolName,'アカウント高校');assert.equal(account.key,key);
   assert.equal(P.create({storage:()=>storage,validate:E.validateSave,key:P.KEY+':account:user-2'}).load().state,null);
+});
+test('full 60-meet histories compress without changing any athlete, result or record',()=>{
+  const game=matureGame(),raw=JSON.stringify(game),packed=P.encode(game);
+  assert.ok(packed.startsWith(P.PACKED_PREFIX));assert.ok(packed.length<raw.length/5);
+  assert.deepEqual(P.decode(packed),game);assert.deepEqual(P.decode(raw),game);
+  const {store,data}=setup({[P.KEY]:raw,[P.BACKUP_KEY]:raw});store.load();
+  assert.equal(store.save(game),true);assert.ok(data.get(P.KEY).startsWith(P.PACKED_PREFIX));
+  assert.equal(data.get(P.BACKUP_KEY),raw,'Encoding-only migration does not replace a prior-game backup');
+  game.schoolName='長期育成高校';assert.equal(store.save(game),true);
+  assert.ok(data.get(P.BACKUP_KEY).startsWith(P.PACKED_PREFIX));
+  assert.equal(store.backup().schoolName,P.decode(raw).schoolName);
+});
+test('guest plus two mature account saves and backups fit within a 5 MiB browser quota',()=>{
+  const game=matureGame(),raw=JSON.stringify(game),data=new Map(),limit=5*1024*1024;
+  const storage={getItem:key=>data.get(key)??null,setItem(key,value){const next=new Map(data);next.set(key,String(value));const bytes=[...next].reduce((n,[k,v])=>n+2*(k.length+v.length),0);if(bytes>limit)throw Object.assign(Error('quota'),{name:'QuotaExceededError'});data.set(key,String(value));}};
+  storage.setItem(P.KEY,raw);storage.setItem(P.BACKUP_KEY,raw);
+  assert.throws(()=>storage.setItem(P.KEY+':account:a',raw),{name:'QuotaExceededError'},'Legacy JSON copies exceed quota');
+  for(const key of [P.KEY,P.KEY+':account:a',P.KEY+':account:b']){
+    const store=P.create({storage:()=>storage,validate:E.validateSave,key});store.load();
+    assert.equal(store.save(game),true);const next={...game,schoolName:key.endsWith(':b')?'二校目長期保存':'長期保存'};assert.equal(store.save(next),true);
+    assert.deepEqual(P.create({storage:()=>storage,validate:E.validateSave,key}).load().state,next);
+  }
+  assert.ok([...data.values()].reduce((n,v)=>n+v.length*2,0)<limit/2);
+  assert.equal(P.decode(data.get(P.KEY)).history.length,60);
+});
+test('damaged compressed primary recovers the backup and keeps the damaged original',()=>{
+  const game=matureGame(),packed=P.encode(game),damaged=packed.replace(/:[a-f0-9]+:/,':deadbeef:');
+  const {store,data}=setup({[P.KEY]:damaged,[P.BACKUP_KEY]:packed});
+  const loaded=store.load();assert.equal(loaded.recovered,true);assert.deepEqual(loaded.state,game);assert.equal(data.get(P.RECOVERY_KEY),damaged);
+  assert.equal(store.save(loaded.state),true);assert.deepEqual(P.decode(data.get(P.KEY)),game);
+});
+test('compressed headers, checksums and decompression limits reject corrupted data',()=>{
+  assert.equal(P.decode(P.PACKED_PREFIX+(P.MAX_SAVE_CHARACTERS+1)+':1:anything'),null);
+  assert.equal(P.decode(P.PACKED_PREFIX+'1:1:'+LZ.compressToUTF16('x'.repeat(100000))),null);
+  assert.throws(()=>LZ.decompressFromUTF16(LZ.compressToUTF16('x'.repeat(100000)),100),RangeError);
+  assert.equal(P.decode(P.PACKED_PREFIX+'bad-header'),null);
+  assert.equal(P.decode(P.encode(matureGame()).slice(0,-50)),null);
+  assert.throws(()=>P.encode({large:'x'.repeat(P.MAX_SAVE_CHARACTERS)}),/save-size/);
+});
+test('a failed new write after legacy compaction keeps the exact previous progress',()=>{
+  const game=matureGame(),raw=JSON.stringify(game),{store,storage,data}=setup({[P.KEY]:raw});store.load();
+  const set=storage.setItem;let writes=0;storage.setItem=(key,value)=>{if(key===P.KEY&&++writes===2)throw Error('quota');set(key,value);};
+  const next={...game,schoolName:'まだ保存されていない'};assert.equal(store.save(next),false);
+  assert.deepEqual(P.decode(data.get(P.KEY)),game);assert.deepEqual(P.decode(data.get(P.BACKUP_KEY)),game);
+  storage.setItem=set;assert.equal(store.save(next),true);assert.deepEqual(P.decode(data.get(P.KEY)),next);
+});
+test('another tab compacting unchanged progress is not mistaken for a gameplay conflict',()=>{
+  const game=matureGame(),{store,storage}=setup({[P.KEY]:JSON.stringify(game)});store.load();
+  const other=P.create({storage:()=>storage,validate:E.validateSave});other.load();assert.equal(other.save(game),true);
+  assert.equal(store.hasConflict(),false);game.schoolName='同じ進行から続行';assert.equal(store.save(game),true);
+  assert.equal(other.hasConflict(),true);
+});
+test('successful reload clears a previous recovery-preservation block',()=>{
+  const {store,storage,data}=setup({[P.KEY]:'damaged'}),set=storage.setItem;storage.setItem=()=>{throw Error('quota');};store.load();assert.equal(store.save(E.createGame()),false);
+  storage.setItem=set;const game=E.createGame();data.set(P.KEY,JSON.stringify(game));assert.deepEqual(store.load().state,game);game.schoolName='復旧後の続き';assert.equal(store.save(game),true);
 });
