@@ -209,6 +209,31 @@ test('the complete three-year cycle grows cohorts and graduates the founding cla
   assert.ok(state.money >= 0);
 });
 
+test('cloud JSONB object-key reordering is accepted without weakening practice-card validation', () => {
+  const reorder = value => Array.isArray(value) ? value.map(reorder)
+    : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).reverse().map(([key, entry]) => [key, reorder(entry)])) : value;
+  const initial = G.createGame(20261008);
+  initial.practiceCards = clone(G.PRACTICE_CARDS.slice(0, 3));
+  const reordered = reorder(initial);
+  assert.notEqual(JSON.stringify(initial), JSON.stringify(reordered));
+  assert.deepEqual(reordered, initial);
+  assert.equal(G.validateSave(reordered), true);
+  assert.equal(G.validateSave(JSON.stringify(reordered)), true);
+  for (const mutate of [
+    s => { s.practiceCards[1].cost = 1; },
+    s => { delete s.practiceCards[1].description; },
+    s => { s.practiceCards[1].extra = 'unexpected'; },
+    s => { s.practiceCards[1].stats.technique = 99; },
+    s => { delete s.practiceCards[1].stats.agility; },
+    s => { s.practiceCards[1].stats.extra = 0; },
+    s => { s.practiceCards[1].stats = [0.35, 0.15]; },
+    s => { s.practiceCards[0].stats = []; }
+  ]) {
+    const malformed = clone(reordered); mutate(malformed);
+    assert.equal(G.validateSave(malformed), false, mutate.toString());
+  }
+});
+
 test('save validation rejects invalid versions, impossible resources, malformed athletes and queues', () => {
   assert.equal(G.validateSave('{oops'), false);
   assert.equal(G.validateSave(null), false);

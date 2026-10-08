@@ -7,3 +7,5 @@ dist/
 !.env.example
 playwright-report/
 test-results/
+taf-auth-qa.json
+supabase/.temp/

@@ -58,3 +58,10 @@ test('invalid state is rejected without changing an existing save',()=>{
   const {store,data}=setup();store.load();store.save(E.createGame());const raw=data.get(P.KEY);
   assert.equal(store.save({version:2}),false);assert.equal(data.get(P.KEY),raw);
 });
+test('account namespaces keep saves and backups separate from guest and other accounts',()=>{
+  const {storage,data}=setup();const guest=P.create({storage:()=>storage,validate:E.validateSave});guest.load();const game=E.createGame();guest.save(game);
+  const key=P.KEY+':account:user-1',account=P.create({storage:()=>storage,validate:E.validateSave,key});assert.equal(account.load().state,null);
+  const accountGame=E.createGame();accountGame.schoolName='アカウント高校';account.save(accountGame);accountGame.schoolName='育成高校';account.save(accountGame);
+  assert.equal(data.get(P.KEY),JSON.stringify(game));assert.equal(JSON.parse(data.get(key+'-backup')).schoolName,'アカウント高校');assert.equal(account.key,key);
+  assert.equal(P.create({storage:()=>storage,validate:E.validateSave,key:P.KEY+':account:user-2'}).load().state,null);
+});

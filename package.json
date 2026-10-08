@@ -1,14 +1,16 @@
 {
   "name": "hokago-track-club",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "description": "高校陸上の育成・経営シミュレーション『放課後トラック部』",
   "scripts": {
     "start": "node server.mjs",
     "dev": "node server.mjs",
     "build": "node scripts/build.mjs",
-    "test": "node --test *.test.cjs",
-    "test:browser": "node browser-smoke.cjs"
+    "test": "node --test *.test.cjs supabase/tests/admin-reset.test.mjs",
+    "test:browser": "node browser-smoke.cjs",
+    "test:auth": "node browser-auth.cjs",
+    "admin:reset": "node scripts/admin-reset.mjs"
   },
   "engines": {
     "node": ">=18"
