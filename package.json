@@ -1,6 +1,6 @@
 {
   "name": "hokago-track-club",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "private": true,
   "description": "高校陸上の育成・経営シミュレーション『放課後トラック部』",
   "scripts": {
@@ -12,7 +12,8 @@
     "test:auth": "node browser-auth.cjs",
     "admin:reset": "node scripts/admin-reset.mjs",
     "test:career": "node browser-career.cjs",
-    "test:storage": "node browser-storage.cjs"
+    "test:storage": "node browser-storage.cjs",
+    "test:tutorial": "node browser-tutorial.cjs"
   },
   "engines": {
     "node": ">=18"
