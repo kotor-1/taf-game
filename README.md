@@ -59,7 +59,7 @@ Node.js 18 以降を使用します。ゲーム用の追加パッケージは不
 ## 開発・確認
 
 - `npm dev`: ローカルサーバーを起動します。
-- `npm run build`: 公開用の静的ファイルを `dist/` に生成します。ゲームに必要なファイルだけを含み、更新時のキャッシュを避けるため各アセットのURLに内容のハッシュを付与します。
+- `npm run build`: 公開用の静的ファイルを `docs/` に生成します。ゲームに必要なファイルだけを含み、更新時のキャッシュを避けるため各アセットのURLに内容のハッシュを付与します。
 - `npm test`: 月間育成、男女別出場、年間日程、室内種目、スカウト、世代交代、保存検証などのロジックテストを実行します。
 - `npm run test:browser`: サーバー起動中に、デスクトップ・スマートフォンの操作と表示を確認します。開発用にPlaywrightとChromiumが必要です。`PLAYWRIGHT_MODULE_PATH`で既存のPlaywright、`GAME_URL`で対象URL、`QA_OUTPUT_DIR`でスクリーンショットの出力先を指定できます。
 
@@ -67,6 +67,8 @@ Node.js 18 以降を使用します。ゲーム用の追加パッケージは不
 
 ## GitHub Pages への公開
 
-リポジトリは [kotor-1/taf-game](https://github.com/kotor-1/taf-game) です。GitHub Pages の公開元は **GitHub Actions** に設定しています。`main` への push で `.github/workflows/pages.yml` がテスト・静的ビルドを実行し、成功した版を公開します。Actions 画面から手動実行もできます。
+リポジトリは [kotor-1/taf-game](https://github.com/kotor-1/taf-game) です。GitHub Pages は **Deploy from a branch → main → /docs** を使用します。カスタム GitHub Actions のアカウント制限に依存せず、標準の Pages 公開処理で配信します。
+
+更新時は `npm test` と必要なブラウザーテストを実行し、`npm run build` で `docs/` を再生成してください。ソースと `docs/` の変更をコミットして `main` へ push すると、自動で公開されます。`docs/` は生成物なので、直接編集せず元のファイルを修正します。
 
 更新しても保存キーは変更しないため、公開URLで保存済みのゲームを続けられます。ゲームの保存データをリポジトリへアップロードする必要はありません。

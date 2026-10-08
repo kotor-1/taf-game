@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const output = path.join(root, 'dist');
+const output = path.join(root, 'docs');
 const assets = ['styles.css', 'engine.js', 'persistence.js', 'scene.js', 'app.js', 'favicon.svg'];
 const files = await Promise.all(assets.map(async name => ({ name, contents: await readFile(path.join(root, name)) })));
 let html = await readFile(path.join(root, 'index.html'), 'utf8');
@@ -18,4 +18,4 @@ await mkdir(output, { recursive: true });
 await Promise.all(files.map(file => writeFile(path.join(output, file.name), file.contents)));
 await writeFile(path.join(output, 'index.html'), html);
 await writeFile(path.join(output, '.nojekyll'), '');
-console.log(`Built ${files.length + 2} static files in dist/`);
+console.log(`Built ${files.length + 2} static files in docs/`);

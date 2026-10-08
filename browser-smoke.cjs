@@ -159,6 +159,36 @@ async function checkPersistence(browser) {
   await assertRenderedSave(recovery, updated);
   await recoveryContext.close();
 
+  // A complete 60-meet campaign export exceeds the old 2 MB import limit.
+  const longCampaign = calendarState(5), entries = {}, used = new Set();
+  for (const athlete of longCampaign.athletes) { athlete.injury = 0; athlete.energy = 100; }
+  for (const division of engine.getMeetEvents(longCampaign)) {
+    if (division.id === 'relay') {
+      entries[division.key] = longCampaign.athletes.filter(a => a.gender === division.gender).slice(0, 4).map(a => a.id);
+    } else {
+      const athlete = longCampaign.athletes.find(a => a.gender === division.gender && !used.has(a.id));
+      if (athlete) { entries[division.key] = athlete.id; used.add(athlete.id); }
+    }
+  }
+  assert.equal(engine.runMeet(longCampaign, entries, 'steady').ok, true);
+  longCampaign.history = Array.from({ length: 60 }, () => structuredClone(longCampaign.lastMeet));
+  assert.equal(engine.validateSave(longCampaign), true);
+  const largeBuffer = Buffer.from(JSON.stringify(longCampaign, null, 2));
+  assert.ok(largeBuffer.length > 2_000_000, 'Exercise import of an actual game export larger than the old limit');
+  const largeContext = await browser.newContext({ acceptDownloads: true });
+  const largePage = await largeContext.newPage();
+  await seedGame(largePage);
+  await largePage.locator('#import-save').setInputFiles({ name: 'long-campaign.json', mimeType: 'application/json', buffer: largeBuffer });
+  await largePage.locator('#confirm-import').click();
+  assert.deepEqual(await readSave(largePage), longCampaign);
+  await click(largePage, 'settings');
+  assert.deepEqual(await downloadSave(largePage, 'hokago-long-campaign.json'), longCampaign);
+  await close(largePage);
+  await largePage.reload();
+  assert.equal((await readSave(largePage)).history.length, 60);
+  await assertRenderedSave(largePage, longCampaign);
+  await largeContext.close();
+
   // Quota errors must keep the last persisted state and clearly distinguish unsaved progress.
   await page.evaluate(() => {
     window.qaOriginalSetItem = Storage.prototype.setItem;
@@ -362,6 +392,14 @@ async function checkPersistence(browser) {
     const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
     const small = await mobile.newPage();
     await seedGame(small);
+    assert.ok(await small.locator('.bottomline [data-save-status]').isVisible(), 'Mobile save status remains visible');
+    await click(small, 'manual-save');
+    assert.match(await small.locator('#toast').textContent(), /セーブしました/);
+    await click(small, 'settings');
+    await checkOverflow(small, 'mobile save settings');
+    assert.ok(await small.locator('#game-dialog [data-action="manual-save"]').isVisible());
+    await close(small);
+    await small.evaluate(() => window.scrollTo(0, 0));
     await small.screenshot({ path: artifact('hokago-v2-mobile.png'), fullPage: true });
     for (const tab of ['overview', 'training', 'team', 'scouting', 'facilities', 'calendar', 'diary']) {
       await navigate(small, tab);
@@ -392,6 +430,6 @@ async function checkPersistence(browser) {
     assert.deepEqual(errors, [], 'No browser runtime errors or failed requests');
     console.log('PASS: 12 first-year athletes; seven desktop/mobile tabs; monthly plans and cards; suitability; October scouting; 14 gender-separated event results; female hurdles replay; indoor event/standard display and dual meet queue; v2 save/reload/export/import; v1 preservation; mobile layouts.');
     console.log('Screenshots: ' + artifact('hokago-v2-desktop.png') + ', ' + artifact('hokago-v2-mobile.png'));
-    console.log('PASS: published-path assets; manual save and rendered reload; previous-save restore; damaged-primary recovery; failed-write warning and in-memory export/import; retry after storage recovery; stale-tab overwrite prevention.');
+    console.log('PASS: published-path assets; desktop/mobile manual save and rendered reload; previous-save restore; damaged-primary recovery; 60-meet export/import over 2 MB; failed-write warning and in-memory export/import; retry after storage recovery; stale-tab overwrite prevention.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
