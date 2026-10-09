@@ -9,6 +9,7 @@ const fs=require('node:fs/promises');
 const path=require('node:path');
 const os=require('node:os');
 const E=require('./engine.js');
+const P=require('./persistence.js');
 const fixturePath=process.env.TAF_LONG_SAVE_FILE;
 if(!fixturePath){console.log('SKIP: long-save browser QA requires TAF_LONG_SAVE_FILE.');process.exit(0);}
 let playwright;
@@ -19,11 +20,15 @@ const output=process.env.QA_OUTPUT_DIR||'/tmp/taf-storage-qa';
 const key='hokago-track-club-save-v2';
 const accountKey=account=>key+':account:'+account.userId;
 const secrets=new Set(),errors=[];
+const networkByPage=new WeakMap();
 const readSave=(page,k=key)=>page.evaluate(k=>TrackSaveStore.decode(localStorage.getItem(k)),k);
 const action=(page,id)=>page.locator(`[data-action="${id}"]`).first();
 const accountAction=(page,id)=>page.locator(`[data-account-action="${id}"]`).first();
 async function close(page){if(await page.locator('#game-dialog[open]').count())await page.locator('#game-dialog [data-action="close"]').last().click();}
-async function waitSynced(page,account){await page.waitForFunction(k=>{const m=JSON.parse(localStorage.getItem(k+'-sync')||'null');return m&&!m.pending&&m.baseRevision>=1;},accountKey(account),{timeout:45000});}
+async function waitSynced(page,account){
+  try{await page.waitForFunction(k=>{const m=JSON.parse(localStorage.getItem(k+'-sync')||'null');return m&&!m.pending&&m.baseRevision>=1;},accountKey(account),{timeout:90000});}
+  catch(error){const diagnostic=await page.evaluate(k=>{const m=JSON.parse(localStorage.getItem(k+'-sync')||'null');return {sync:m?{pending:m.pending,baseRevision:m.baseRevision}:null,status:[...document.querySelectorAll('[data-cloud-status]')].map(node=>node.textContent)};},accountKey(account));throw Error('Cloud sync timed out: '+JSON.stringify({...diagnostic,network:networkByPage.get(page)||[]}));}
+}
 async function login(page,account){
   await close(page);await accountAction(page,'open').click();await accountAction(page,'signin-tab').click();
   await page.locator('#login-id').fill(account.username);await page.locator('#login-password').fill(account.password);
@@ -33,17 +38,23 @@ async function login(page,account){
   await waitSynced(page,account);
 }
 async function logout(page){await close(page);await accountAction(page,'open').click();await accountAction(page,'logout-confirm').click();await accountAction(page,'logout').click();await page.waitForFunction(()=>document.querySelector('.account-strip-copy strong')?.textContent==='ゲストでプレイ中');}
-async function observe(page){page.on('pageerror',error=>errors.push(error.message));await page.goto(url);await page.locator('#campus').waitFor();}
+async function observe(page){
+  const network=[];networkByPage.set(page,network);
+  page.on('pageerror',error=>errors.push(error.message));
+  page.on('response',response=>{const endpoint=new URL(response.url()).pathname;if(endpoint.startsWith('/rest/v1/'))network.push({endpoint,status:response.status(),elapsedMs:Math.round(Date.now()-response.request().timing().startTime)});});
+  page.on('requestfailed',request=>{const endpoint=new URL(request.url()).pathname;if(endpoint.startsWith('/rest/v1/'))network.push({endpoint,error:request.failure()?.errorText,elapsedMs:Math.round(Date.now()-request.timing().startTime)});});
+  await page.goto(url);await page.locator('#campus').waitFor();
+}
 (async()=>{
   const game=JSON.parse(await fs.readFile(fixturePath,'utf8'));assert.equal(E.validateSave(game),true);assert.equal(game.history.length,60);assert.equal(game.athletes.length,36);
-  const raw=JSON.stringify(game);assert.ok(raw.length>1000000,'Use a mature long-campaign fixture');
+  const raw=JSON.stringify(game),packed=P.encode(game);assert.ok(raw.length>1000000,'Use a mature long-campaign fixture');
   let accounts=null;
   if(process.env.TAF_AUTH_QA_FILE){const stat=await fs.stat(process.env.TAF_AUTH_QA_FILE);assert.equal(stat.mode&0o077,0);accounts=JSON.parse(await fs.readFile(process.env.TAF_AUTH_QA_FILE,'utf8')).accounts;assert.ok(accounts[0]?.userId&&accounts[1]?.userId);for(const a of accounts)secrets.add(a.password);}
   const ids=accounts?accounts.map(a=>a.userId):['storage-qa-a','storage-qa-b'];
   await fs.mkdir(output,{recursive:true});const browser=await playwright.chromium.launch({headless:true});
   try{
     const context=await browser.newContext({viewport:{width:1440,height:1000},acceptDownloads:true});const page=await context.newPage();
-    await page.addInitScript(({key,raw})=>{if(!sessionStorage.getItem('qa-long-seeded')){localStorage.setItem(key,raw);localStorage.setItem(key+'-backup',raw);sessionStorage.setItem('qa-long-seeded','1');}},{key,raw});
+    await page.addInitScript(({key,packed})=>{if(!sessionStorage.getItem('qa-long-seeded')){localStorage.setItem(key,packed);localStorage.setItem(key+'-backup',packed);sessionStorage.setItem('qa-long-seeded','1');}},{key,packed});
     await observe(page);assert.equal((await readSave(page)).year,game.year);
     const sizes=await page.evaluate(({key,game,raw,ids})=>{
       let legacyQuotaHit=false;const testKeys=[];
@@ -72,13 +83,13 @@ async function observe(page){page.on('pageerror',error=>errors.push(error.messag
     console.log(JSON.stringify({year:game.year,athletes:game.athletes.length,rawCharacters:sizes.rawCharacters,totalSixSlotCharacters:sizes.storedCharacters,largestPackedSlot:Math.max(...sizes.slots.map(s=>s.characters))}));
     console.log('PASS: mature save reload, graduated-athlete highlight replay, career screen, normal JSON export.');
     if(accounts){
-      const [A,B]=accounts;await login(page,A);assert.equal((await readSave(page,accountKey(A))).year,game.year);
+      const [A,B]=accounts;console.log('CHECK: upload current full fixture to existing account A.');await login(page,A);assert.deepEqual(await readSave(page,accountKey(A)),{...game,schoolName:'長期アカウントＡ高校'},'Upload this run\'s complete fixture rather than an older cloud save from a previous QA run');
       await close(page);await page.locator('[data-page="overview"]').first().click();
       let before=await readSave(page,accountKey(A));if(before.monthPlanPending){await action(page,'monthly-plan').click();await action(page,'confirm-plan').click();await close(page);}
       await action(page,'advance').click();await close(page);await waitSynced(page,A);const progressed=await readSave(page,accountKey(A));assert.equal(progressed.totalWeeks,game.totalWeeks+1);
-      const second=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const other=await second.newPage();await observe(other);await login(other,A);await close(other);
+      console.log('CHECK: load latest cloud save into a separate mobile browser.');const second=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const other=await second.newPage();await observe(other);await login(other,A);await close(other);
       assert.deepEqual(await readSave(other,accountKey(A)),progressed);assert.equal((await readSave(other,accountKey(A))).history.length,60);await other.screenshot({path:path.join(output,'long-cloud-mobile.png'),fullPage:true});
-      await logout(page);assert.equal((await readSave(page)).schoolName,'長期ゲスト保存高校');await login(page,B);assert.equal((await readSave(page,accountKey(B))).schoolName,'長期アカウントＢ高校');assert.equal((await readSave(page,accountKey(A))).totalWeeks,progressed.totalWeeks);
+      await logout(page);assert.equal((await readSave(page)).schoolName,'長期ゲスト保存高校');await login(page,B);assert.deepEqual(await readSave(page,accountKey(B)),{...game,schoolName:'長期アカウントＢ高校'});assert.equal((await readSave(page,accountKey(A))).totalWeeks,progressed.totalWeeks);
       assert.equal(await page.locator('[data-save-status]').first().getAttribute('data-save-state'),'saved');
       console.log('PASS: real Supabase long-save upload, one-week progression, separate-mobile-browser resume and second-account isolation; no new accounts.');
     }

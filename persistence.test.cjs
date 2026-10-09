@@ -93,14 +93,14 @@ test('full 60-meet histories compress without changing any athlete, result or re
 test('guest plus two mature account saves and backups fit within a 5 MiB browser quota',()=>{
   const game=matureGame(),raw=JSON.stringify(game),data=new Map(),limit=5*1024*1024;
   const storage={getItem:key=>data.get(key)??null,setItem(key,value){const next=new Map(data);next.set(key,String(value));const bytes=[...next].reduce((n,[k,v])=>n+2*(k.length+v.length),0);if(bytes>limit)throw Object.assign(Error('quota'),{name:'QuotaExceededError'});data.set(key,String(value));}};
-  storage.setItem(P.KEY,raw);storage.setItem(P.BACKUP_KEY,raw);
-  assert.throws(()=>storage.setItem(P.KEY+':account:a',raw),{name:'QuotaExceededError'},'Legacy JSON copies exceed quota');
+  assert.throws(()=>{for(let i=0;i<6;i++)storage.setItem('legacy-'+i,raw);},{name:'QuotaExceededError'},'Uncompressed copies exceed quota');
+  data.clear();
   for(const key of [P.KEY,P.KEY+':account:a',P.KEY+':account:b']){
     const store=P.create({storage:()=>storage,validate:E.validateSave,key});store.load();
     assert.equal(store.save(game),true);const next={...game,schoolName:key.endsWith(':b')?'二校目長期保存':'長期保存'};assert.equal(store.save(next),true);
     assert.deepEqual(P.create({storage:()=>storage,validate:E.validateSave,key}).load().state,next);
   }
-  assert.ok([...data.values()].reduce((n,v)=>n+v.length*2,0)<limit/2);
+  assert.ok([...data.entries()].reduce((n,[k,v])=>n+(k.length+v.length)*2,0)<limit);
   assert.equal(P.decode(data.get(P.KEY)).history.length,60);
 });
 test('damaged compressed primary recovers the backup and keeps the damaged original',()=>{

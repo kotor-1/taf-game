@@ -60,6 +60,9 @@
     const fetcher=options.fetch||root.fetch&&root.fetch.bind(root);
     const sdk=options.sdk||root.supabase;
     const timeoutMs=options.timeoutMs||15000;
+    // Full meet histories can exceed 5 MB. Keep authentication responsive while
+    // allowing a bounded, longer transfer window for cloud saves and downloads.
+    const saveTimeoutMs=options.saveTimeoutMs||options.timeoutMs||60000;
     const subscribers=new Set();
     let client=options.client||null,subscription=null,disposed=false,epoch=0,initializing=null;
     let status={ready:false,configured:false,user:null,error:null,authSettingsChecked:false,emailConfirmationRequired:null,signupAllowed:null};
@@ -91,13 +94,13 @@
       try{return await fetcher(input,{...init,signal:controller.signal});}
       finally{clearTimeout(timer);if(init.signal)init.signal.removeEventListener('abort',abort);}
     }
-    async function request(path,{method='GET',body,accessToken}={}){
+    async function request(path,{method='GET',body,accessToken,deadlineMs=timeoutMs}={}){
       assertAvailable();
       const headers={apikey:publishableKey,Accept:'application/json'};
       if(accessToken)headers.Authorization='Bearer '+accessToken;
       if(body!==undefined)headers['Content-Type']='application/json';
       const controller=new AbortController();let timer;
-      const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(failure('network','通信が完了しませんでした。接続を確認してからもう一度お試しください。'));},timeoutMs);});
+      const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(failure('network','通信が完了しませんでした。接続を確認してからもう一度お試しください。'));},deadlineMs);});
       const work=(async()=>{
         const response=await fetcher(url+path,{method,headers,body:body===undefined?undefined:JSON.stringify(body),signal:controller.signal});
         let data;
@@ -232,7 +235,7 @@
     async function load(expectedUserId){
       return operation(async()=>{
         const context=await snapshot(expectedUserId);
-        const rows=await request('/rest/v1/taf_saves?select=user_id,payload,revision,updated_at&user_id=eq.'+encodeURIComponent(context.id)+'&limit=1',{accessToken:context.accessToken});
+        const rows=await request('/rest/v1/taf_saves?select=user_id,payload,revision,updated_at&user_id=eq.'+encodeURIComponent(context.id)+'&limit=1',{accessToken:context.accessToken,deadlineMs:saveTimeoutMs});
         checkIdentity(context.id,context.atEpoch);
         if(!Array.isArray(rows)||rows.length>1)throw failure('invalid_save','クラウドの応答が正しくありません。');
         if(rows.length===0)return null;
@@ -256,7 +259,7 @@
       }catch(error){throw recordError(error);}
       return operation(async()=>{
         const context=await snapshot(expectedUserId);
-        const result=await request('/rest/v1/rpc/taf_save_game',{method:'POST',body:{p_payload:payload,p_expected_revision:expectedRevision},accessToken:context.accessToken});
+        const result=await request('/rest/v1/rpc/taf_save_game',{method:'POST',body:{p_payload:payload,p_expected_revision:expectedRevision},accessToken:context.accessToken,deadlineMs:saveTimeoutMs});
         checkIdentity(context.id,context.atEpoch);
         const metadata=parseMetadata(result);
         if(metadata.revision!==expectedRevision+1)throw failure('invalid_save','クラウドの保存世代を確認できませんでした。再読み込みして確認してください。');

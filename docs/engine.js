@@ -67,17 +67,17 @@
     { id: 'challenge', name: '強豪校チャレンジ', rivalBonus: 4, nationalBonus: 8, description: '相手の能力が地区・県・地方で+4、全国大会で+8。育成効果は通常と同じ。自チームの能力への直接補正はありません。' }
   ];
   const MEETS = [
-    { id: 'district', name: 'インターハイ 地区予選', week: 5, dateLabel: '5月1週', kind: 'school', level: 1, rating: 55, prize: 14000, next: 'prefecture', description: '男女・種目別に3位以内の選手が県大会へ。' },
-    { id: 'prefecture', name: 'インターハイ 県大会', week: 7, dateLabel: '5月3週', kind: 'school', level: 2, rating: 65, prize: 22000, next: 'regional', description: '地区予選を通過した選手が競う。3位以内で地方大会へ。' },
-    { id: 'regional', name: 'インターハイ 地方大会', week: 11, dateLabel: '6月3週・中旬', kind: 'school', level: 3, rating: 75, prize: 35000, next: 'nationals', description: '県大会を通過した選手が競う。3位以内でインターハイへ。' },
-    { id: 'nationals', name: 'インターハイ', week: 16, dateLabel: '7月4週・月末', kind: 'school', level: 4, rating: 86, prize: 60000, description: '高校陸上の頂点。ここでの優勝が部の大きな目標。' },
-    { id: 'rookieDistrict', name: '新人戦 地区予選', week: 21, dateLabel: '9月1週・上旬', kind: 'school', rookie: true, level: 1, rating: 55, prize: 14000, next: 'rookiePrefecture', description: '1・2年生の大会。男女・種目別3位以内で県大会へ。' },
-    { id: 'rookiePrefecture', name: '新人戦 県大会', week: 23, dateLabel: '9月3週', kind: 'school', rookie: true, level: 2, rating: 66, prize: 22000, next: 'rookieRegional', description: '1・2年生の県大会。3位以内で地方大会へ。' },
-    { id: 'rookieRegional', name: '新人戦 地方大会', week: 25, dateLabel: '10月1週', kind: 'school', rookie: true, level: 3, rating: 77, prize: 35000, description: '来年のインターハイにつながる秋の大舞台。' },
-    { id: 'u18nationals', name: 'U18日本選手権', week: 27, dateLabel: '10月3週', kind: 'championship', category: 'U18', minAge: 16, maxAge: 17, level: 4, rating: 87, prize: 50000, description: '暦年で16・17歳。ゲーム独自の参加標準記録が必要。男女ハードルはU18規格。' },
-    { id: 'u20nationals', name: 'U20日本選手権', week: 27, dateLabel: '10月3週', kind: 'championship', category: 'U20', minAge: 16, maxAge: 19, level: 4, rating: 91, prize: 60000, description: '暦年で16〜19歳。ゲーム独自の参加標準記録が必要。同週のU18との重複出場不可。' },
-    { id: 'indoorU18', name: 'U18室内日本選手権', week: 41, dateLabel: '2月1週', kind: 'indoor', category: 'U18', minAge: 16, maxAge: 17, level: 4, rating: 88, prize: 50000, description: '2025年大阪室内の種目・年齢区分・標準記録を参照した再現大会。' },
-    { id: 'indoorU20', name: 'U20室内日本選手権', week: 41, dateLabel: '2月1週', kind: 'indoor', category: 'U20', minAge: 18, maxAge: 19, level: 4, rating: 93, prize: 60000, description: '2025年大阪室内を参照。女子棒高跳・男女三段跳はU18選手も出場可能。' }
+    { id: 'district', name: 'インターハイ 地区予選', week: 5, dateLabel: '5月1週', kind: 'school', level: 1, rating: 75, prize: 14000, next: 'prefecture', description: '個人トラック16位、跳躍・リレー8位以内で県大会へ。通常モードの100m通過目安は男子11.40秒・女子13.20秒。' },
+    { id: 'prefecture', name: 'インターハイ 県大会', week: 7, dateLabel: '5月3週', kind: 'school', level: 2, rating: 85, prize: 22000, next: 'regional', description: '地区予選を通過した選手が競う。6位以内で地方大会へ。' },
+    { id: 'regional', name: 'インターハイ 地方大会', week: 11, dateLabel: '6月3週・中旬', kind: 'school', level: 3, rating: 92, prize: 35000, next: 'nationals', description: '県大会を通過した選手が競う。6位以内でインターハイへ。' },
+    { id: 'nationals', name: 'インターハイ', week: 16, dateLabel: '7月4週・月末', kind: 'school', level: 4, rating: 97, prize: 60000, description: '高校陸上の頂点。ここでの優勝が部の大きな目標。' },
+    { id: 'rookieDistrict', name: '新人戦 地区予選', week: 21, dateLabel: '9月1週・上旬', kind: 'school', rookie: true, level: 1, rating: 75, prize: 14000, next: 'rookiePrefecture', description: '1・2年生の大会。個人トラック16位、跳躍・リレー8位以内で県大会へ。' },
+    { id: 'rookiePrefecture', name: '新人戦 県大会', week: 23, dateLabel: '9月3週', kind: 'school', rookie: true, level: 2, rating: 85, prize: 22000, next: 'rookieRegional', description: '1・2年生の県大会。6位以内で地方大会へ。' },
+    { id: 'rookieRegional', name: '新人戦 地方大会', week: 25, dateLabel: '10月1週', kind: 'school', rookie: true, level: 3, rating: 92, prize: 35000, description: '来年のインターハイにつながる秋の大舞台。' },
+    { id: 'u18nationals', name: 'U18日本選手権', week: 27, dateLabel: '10月3週', kind: 'championship', category: 'U18', minAge: 16, maxAge: 17, level: 4, rating: 97, prize: 50000, description: '暦年で16・17歳。ゲーム独自の参加標準記録が必要。男女ハードルはU18規格。' },
+    { id: 'u20nationals', name: 'U20日本選手権', week: 27, dateLabel: '10月3週', kind: 'championship', category: 'U20', minAge: 16, maxAge: 19, level: 4, rating: 98, prize: 60000, description: '暦年で16〜19歳。ゲーム独自の参加標準記録が必要。同週のU18との重複出場不可。' },
+    { id: 'indoorU18', name: 'U18室内日本選手権', week: 41, dateLabel: '2月1週', kind: 'indoor', category: 'U18', minAge: 16, maxAge: 17, level: 4, rating: 97, prize: 50000, description: '2025年大阪室内の種目・年齢区分・標準記録を参照した再現大会。' },
+    { id: 'indoorU20', name: 'U20室内日本選手権', week: 41, dateLabel: '2月1週', kind: 'indoor', category: 'U20', minAge: 18, maxAge: 19, level: 4, rating: 98, prize: 60000, description: '2025年大阪室内を参照。女子棒高跳・男女三段跳はU18選手も出場可能。' }
   ];
   const TRAITS = [
     { name: 'スプリンター', description: '短距離練習の成長15%増。', training: 'sprint' },
@@ -90,7 +90,26 @@
   const COLORS = ['#f5a84f', '#7bb0e9', '#d7a1e8', '#79c9a2', '#ed8880', '#c7ba72', '#83b8bd', '#efa8bd'];
   const FIRST_NAMES = { boys: ['翔太', '陸', '悠真', '湊', '颯太', '大和', '悠', '蓮'], girls: ['結衣', '陽菜', '凛', '葵', '美咲', '紬', '花音', '七海'] };
   const LAST_NAMES = ['佐藤', '高橋', '小林', '中村', '山本', '渡辺', '石川', '田中', '松本', '森', '藤原', '吉田'];
-  const RIVAL_SCHOOLS = ['北陵高校', '桜丘高校', '西原高校', '朝日学院', '東雲高校', '白河学園', '城南高校'];
+  const RIVAL_SCHOOLS = ['北陵高校', '桜丘高校', '西原高校', '朝日学院', '東雲高校', '白河学園', '城南高校', ...['山城','若葉','清峰','瑞穂','青雲','桃山','海星','大和','高森','日向','南陽','松風','紅葉','藤ヶ丘','常盤','白鷺','鳴海','光陵','泉野','八雲','花咲','鳳凰','向陽','蒼風','星見','橘','緑川','水鏡','北斗','春日'].flatMap(name=>[name+'高校',name+'学園'])];
+  // Fictional fields: total starters and schools include the player's entry.
+  const FIELD_SIZES = {1:{track:[48,24],field:[24,16],relay:[24,24]},2:{track:[64,40],field:[32,24],relay:[32,32]},3:{track:[48,36],field:[32,24],relay:[24,24]},4:{track:[64,56],field:[40,32],relay:[48,48]}};
+  const RESULT_RATINGS = [0,40,60,75,90,100,105];
+  // Continuous curves retain development headroom instead of subtracting a
+  // fixed time at every level. Index 3 is the ordinary district qualifying level.
+  const RESULT_CURVES = {
+    '100m':{boys:[18,13,11.95,11.4,10.7,10.2,10.05],girls:[22,15.3,13.9,13.2,12.3,11.6,11.4]},
+    '400m':{boys:[100,62,54.8,51.5,48.2,46.2,45.7],girls:[120,74,65,61.5,56.8,53.8,53.2]},
+    '1500m':{boys:[600,320,270,250,229,217,213],girls:[720,390,322,300,275,255,250]},
+    '110mh':{boys:[30,19.6,16.8,15.6,14.1,13.4,13.2]},
+    '100mh':{girls:[31,20,17.2,15.5,14,13.1,12.9]},
+    longjump:{boys:[2.2,4.9,5.95,6.4,7.15,7.8,8],girls:[1.8,3.9,4.75,5.1,5.85,6.4,6.55]},
+    highjump:{boys:[.75,1.42,1.72,1.88,2.08,2.22,2.27],girls:[.6,1.2,1.45,1.56,1.75,1.9,1.94]},
+    polevault:{boys:[.8,2.6,3.65,4.1,4.95,5.5,5.65],girls:[.6,1.9,2.95,3.25,3.95,4.35,4.5]},
+    triplejump:{boys:[6,10.7,12.65,13.4,14.75,15.85,16.05],girls:[5,8.9,10.2,10.9,12,12.95,13.2]},
+    relay:{boys:[74,49.5,45.5,43.7,41.35,39.9,39.3],girls:[86,58,53.5,51.5,47.7,45.2,44.7]},
+    '60m':{boys:[12,8.3,7.6,7.3,6.93,6.65,6.57],girls:[14,9.6,8.72,8.4,7.95,7.5,7.41]},
+    '60mh':{boys:[18,11.5,9.5,8.85,8.08,7.65,7.55],girls:[19,12.5,10.5,9.9,9.02,8.3,8.15]}
+  };
   const GENDER_NAMES = { boys: '男子', girls: '女子' };
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
   const round = (v, places = 1) => Number(v.toFixed(places));
@@ -261,7 +280,7 @@
   }
   function getSchedule() { return MEETS.map(meet => ({ ...meet })); }
   function getNextMeet(state) {
-    const meet = state.pendingMeet || MEETS.find(m => m.week >= state.week && !state.completedMeets.includes(m.id));
+    const meet = MEETS.find(m=>m.id===state.pendingMeet?.id) || MEETS.find(m => m.week >= state.week && !state.completedMeets.includes(m.id));
     if (!meet) return { ...MEETS[0], weeksUntil: 48 - state.week + 5, qualified: true, nextYear: true, year: state.year + 1 };
     const qualification = state.qualification[meet.id];
     const qualified = meet.kind !== 'school' || qualification === true || Object.keys(qualification || {}).length > 0;
@@ -321,11 +340,30 @@
     return { eligible: true, official, open: !official, reason: official ? '正式出場できます。' : '予選通過なし：オープン記録会として出場（表彰・次大会進出なし）。' };
   }
   function getEligibleAthletes(state, division, meet) { return state.athletes.filter(athlete => getEntryStatus(state, athlete, division, meet).eligible); }
+  function getMeetField(state, inputDivision, requestedMeet) {
+    const requested = requestedMeet || state.pendingMeet || getNextMeet(state);
+    const meet = MEETS.find(m=>m.id===(typeof requested==='string'?requested:requested?.id));
+    if(!meet)return null;
+    const division = resolveDivision(state,inputDivision,meet);
+    if(!division)return null;
+    const type = division.teamSize?'relay':division.unit==='m'?'field':'track';
+    const sizes = meet.kind==='indoor' ? type==='field'?[8,8]:[32,28] : meet.kind==='championship' ? type==='field'?[24,20]:[48,40] : FIELD_SIZES[meet.level][type];
+    const qualifyPlaces = !meet.next?0:meet.level===1?(type==='track'?16:8):6;
+    const baseRating = meet.rating;
+    const mode = CAREER_MODES.find(m=>m.id===state.career?.season.mode)||CAREER_MODES[0];
+    const cutoffRating = baseRating + (meet.level===4?mode.nationalBonus:mode.rivalBonus);
+    return {participants:sizes[0],schools:sizes[1],qualifyPlaces,cutoffRating,benchmark:qualifyPlaces?ratingToResult(cutoffRating,division.id,division.gender,division.hurdleHeight):null};
+  }
   function readiness(athlete) { return (.86 + clamp(athlete.energy, 0, 100) * .0014) * (.96 + clamp(athlete.morale, 0, 100) * .0005) * (athlete.injury > 0 ? .76 : 1); }
   function ratingToResult(rating, eventId, gender = 'boys', hurdleHeight) {
-    const girl = gender === 'girls';
-    const formulas = { '100m': () => (girl ? 17.8 : 16.2) - rating * .062, '400m': () => (girl ? 87 : 77) - rating * .32, '1500m': () => (girl ? 445 : 395) - rating * (girl ? 1.55 : 1.5), longjump: () => (girl ? 1.9 : 2.5) + rating * (girl ? .045 : .053), '110mh': () => 23.6 - rating * .102 + (hurdleHeight === 1.067 ? .25 : 0), '100mh': () => 23.9 - rating * .101 + (hurdleHeight === .838 ? .20 : 0), highjump: () => (girl ? .65 : .85) + rating * (girl ? .013 : .014), polevault: () => (girl ? .65 : .80) + rating * (girl ? .037 : .047), triplejump: () => (girl ? 5.8 : 7.0) + rating * (girl ? .072 : .092), relay: () => (girl ? 73 : 64) - rating * .245, '60m': () => (girl ? 11.10 : 10) - rating * .032, '60mh': () => (girl ? 12.90 : 12.3) - rating * .047 };
-    return formulas[eventId] ? round(formulas[eventId](), eventId === '1500m' ? 1 : 2) : 0;
+    const values=RESULT_CURVES[eventId]?.[gender];if(!values)return 0;
+    const r=clamp(rating,0,105),upper=RESULT_RATINGS.findIndex(point=>point>=r),index=Math.max(1,upper);
+    const fraction=(r-RESULT_RATINGS[index-1])/(RESULT_RATINGS[index]-RESULT_RATINGS[index-1]);
+    let value=values[index-1]+(values[index]-values[index-1])*fraction;
+    if(eventId==='110mh'&&hurdleHeight!==1.067)value-=.25;
+    if(eventId==='100mh'&&hurdleHeight!==.838)value-=.20;
+    if(eventId==='60mh'&&gender==='girls'&&hurdleHeight===.762)value-=.12;
+    return round(value,eventId==='1500m'?1:2);
   }
   function predictResult(athlete, eventId, division) { const height = division?.hurdleHeight ?? (eventId === '110mh' ? 1.067 : eventId === '100mh' ? .838 : eventId === '60mh' ? athlete.gender === 'boys' ? .991 : .838 : undefined); return ratingToResult(getAthleteRating(athlete, eventId) * readiness(athlete), eventId, athlete.gender, height); }
   function relayAthletes(state, ids) { if (!Array.isArray(ids) || ids.length !== 4 || new Set(ids).size !== 4) return null; const athletes = ids.map(id => state.athletes.find(a => a.id === id)); return athletes.some(a => !a || a.injury > 0) || new Set(athletes.map(a => a.gender)).size !== 1 ? null : athletes; }
@@ -427,10 +465,25 @@
     state.history.unshift(JSON.parse(JSON.stringify(state.lastMeet))); state.history.length = Math.min(state.history.length,60); state.pendingMeet = state.pendingMeets.shift() || null; addLog(state,meet.name + '：' + summary.message);
     return { ok:true,results,summary,message:summary.message,meet:state.lastMeet };
   }
+  function makeRivals(state,meet,division,field,official) {
+    const available=RIVAL_SCHOOLS.filter(school=>school!==state.schoolName),offset=seedValue(state.year+':'+meet.id)%available.length;
+    const schools=Array.from({length:field.schools-1},(_,i)=>available[(i+offset)%available.length]);
+    const pivot=field.qualifyPlaces||Math.min(8,Math.floor(field.participants/2));
+    const topSpread=meet.level===1?13:meet.level===2?10:meet.level===3?8:5;
+    const depth=meet.level===1?35:meet.level===2?23:meet.level===3?16:13;
+    const cutoff=official?field.cutoffRating:Math.max(60,field.cutoffRating-15);
+    return Array.from({length:field.participants-1},(_,i)=>{
+      const place=i+1,school=schools[i%schools.length],slot=Math.floor(i/schools.length);
+      const rating=cutoff+(place<=pivot?topSpread*(1-place/pivot):-depth*Math.pow((place-pivot)/(field.participants-1-pivot),.85))+(random(state)-.5)*1.2;
+      const value=ratingToResult(rating,division.id,division.gender,division.hurdleHeight),nameSeed=seedValue(state.year+':'+school+':'+division.gender);
+      const name=division.teamSize?school:LAST_NAMES[(nameSeed+slot)%LAST_NAMES.length]+' '+FIRST_NAMES[division.gender][(nameSeed>>>8)%FIRST_NAMES[division.gender].length];
+      return {athleteId:'rival-'+state.year+'-'+division.key+'-'+i,name,school,value,formatted:formatResult(value,division.id),isPlayer:false};
+    });
+  }
   function runMeet(state, entries, tactic = 'balanced') {
     if (!validState(state)) return fail('部のデータを読み込めません。'); if (!state.pendingMeet) return fail('今日は大会当日ではありません。'); if (!['balanced','aggressive','steady'].includes(tactic)) return fail('作戦が正しくありません。'); const checked = validateEntries(state,entries); if (!checked.ok) return checked;
-    const career = ensureCareer(state), careerMode = CAREER_MODES.find(m => m.id === career.season.mode);
-    const meet = state.pendingMeet, divisions = getMeetEvents(state,meet), results = [], summary = { title: meet.name + ' 結果', message: '', prize: 0, reputation: 0, gold: 0, silver: 0, bronze: 0, qualified: false, stageId: meet.id, official: false };
+    ensureCareer(state);
+    const meet = MEETS.find(m=>m.id===state.pendingMeet.id), divisions = getMeetEvents(state,meet), results = [], summary = { title: meet.name + ' 結果', message: '', prize: 0, reputation: 0, gold: 0, silver: 0, bronze: 0, qualified: false, stageId: meet.id, official: false };
     if (meet.next) state.qualification[meet.next] = {};
     for (const [key,entry] of checked.selected) {
       const division = divisions.find(d => d.key === key), eventId = division.id, athletes = division.teamSize ? relayAthletes(state,entry) : [state.athletes.find(a => a.id === entry)], athlete = athletes[0];
@@ -441,7 +494,8 @@
       const name = division.teamSize ? state.schoolName + ' ' + GENDER_NAMES[division.gender] + 'リレー' : athlete.name;
       const members = division.teamSize ? athletes.map((a,i) => ({athleteId:a.id,name:a.name,color:a.color,gender:a.gender,leg:i+1})) : null;
       const participants = [{athleteId:athlete.id,name,school:state.schoolName,value,formatted:formatResult(value,eventId),isPlayer:true,...(members ? {members,athleteIds:[...entry]} : {})}];
-      for (let i=0;i<7;i++) { const r = (official ? meet.rating : Math.max(48,meet.rating-13)) + (meet.level === 4 ? careerMode.nationalBonus : careerMode.rivalBonus) + (i-3)*2 + (random(state)-.5)*5, v = ratingToResult(r,eventId,division.gender,division.hurdleHeight); participants.push({athleteId:'rival-'+i,name:RIVAL_SCHOOLS[i],school:RIVAL_SCHOOLS[i],value:v,formatted:formatResult(v,eventId),isPlayer:false}); }
+      const field=getMeetField(state,division,meet);
+      participants.push(...makeRivals(state,meet,division,field,official));
       participants.sort((a,b) => division.lowerBetter ? a.value-b.value : b.value-a.value); participants.forEach((p,i) => {p.rank = i && p.value === participants[i-1].value ? participants[i-1].rank : i+1;});
       const rank = participants.find(p => p.isPlayer).rank, book = division.teamSize ? state.teamBest[division.gender] : athlete.best, newBest = better(value,book[eventId],eventId); if (newBest) book[eventId] = value;
       const personalBest = !division.teamSize && better(value,athlete.bestBySpec[division.recordKey],eventId);
@@ -453,11 +507,12 @@
         Object.keys(yearly).forEach(year => { if (Number(year) < calendarYear - 1) delete yearly[year]; });
         athlete.officialBest[division.recordKey] = Object.entries(yearly).map(([year,v]) => ({value:v,calendarYear:Number(year)})).sort((a,b) => division.lowerBetter ? a.value-b.value : b.value-a.value)[0];
       } }
-      const qualified = official && rank <= 3 && !!meet.next, medal = official && rank <= 3 ? ['gold','silver','bronze'][rank-1] : null;
+      const qualificationPlaces=official?field.qualifyPlaces:0,qualificationMark=qualificationPlaces?participants[qualificationPlaces-1].value:null;
+      const qualified = official && rank <= qualificationPlaces && !!meet.next, medal = official && rank <= 3 ? ['gold','silver','bronze'][rank-1] : null;
       if (medal) {state.medals[medal] = safeAdd(state.medals[medal], 1);summary[medal]++;} if (qualified) { state.qualification[meet.next][key] = division.teamSize ? true : [athlete.id]; summary.qualified = true; }
       const prize = Math.round((rank === 1 ? meet.prize : rank === 2 ? meet.prize*.65 : rank===3 ? meet.prize*.4 : 2500) * (official ? 1 : .25)); summary.prize += prize; summary.reputation += official ? (rank === 1 ? 4 : rank <=3 ? 2 : 1) * meet.level : 0;
       for (const member of athletes) {member.energy = round(clamp(member.energy - (tactic==='aggressive'?19:tactic==='steady'?10:14),0,100)); member.morale=clamp(member.morale+(rank<=3?6:rank<=5?1:-2),0,100); if (meet.kind !== 'school' && !state.competedThisWeek.includes(member.id)) state.competedThisWeek.push(member.id);}
-      results.push({eventId,divisionKey:key,eventName:division.name,name,athleteId:athlete.id,athleteName:name,gender:division.gender,category:division.category,indoor:meet.kind==='indoor',...(division.hurdleHeight?{hurdleHeight:division.hurdleHeight}:{}),value,formatted:formatResult(value,eventId),rank,participants,qualified,newBest,personalBest,medal,prize,tactic,official,...(members?{members,athleteIds:[...entry]}:{})});
+      results.push({eventId,divisionKey:key,eventName:division.name,name,athleteId:athlete.id,athleteName:name,gender:division.gender,category:division.category,indoor:meet.kind==='indoor',...(division.hurdleHeight?{hurdleHeight:division.hurdleHeight}:{}),value,formatted:formatResult(value,eventId),rank,participants,fieldSize:participants.length,schoolCount:new Set(participants.map(p=>p.school)).size,qualificationPlaces,qualificationMark,qualified,newBest,personalBest,medal,prize,tactic,official,...(members?{members,athleteIds:[...entry]}:{})});
     }
     if (meet.id==='district'&&summary.qualified) state.goal.districtQualified=true; if (meet.id==='prefecture'&&summary.qualified) state.goal.prefectureQualified=true; if (meet.id==='regional'&&summary.qualified) state.goal.nationalsQualified=true;
     if (meet.id==='nationals'&&summary.gold>0) {state.goal.nationalsWon=true;if(state.goal.wonYear==null)state.goal.wonYear=state.year;}
@@ -486,12 +541,27 @@
       if(!obj(d.qualification)||Object.keys(d.qualification).length!==MEETS.length||!MEETS.every(m=>{const q=d.qualification[m.id];if(['district','rookieDistrict'].includes(m.id))return q===true;if(!obj(q))return false;const keys=getMeetEvents(d,m).map(e=>e.key);return Object.entries(q).every(([key,v])=>keys.includes(key)&&(key.endsWith(':relay')?v===true:Array.isArray(v)&&v.length===1&&v.every(id=>validId(id)&&d.athletes.some(a=>a.id===id&&a.gender===key.split(':')[0]))));}))return false;
       if(!Array.isArray(d.completedMeets)||new Set(d.completedMeets).size!==d.completedMeets.length||!d.completedMeets.every(id=>MEETS.some(m=>m.id===id&&m.week<=d.week)))return false;
       if(MEETS.some(m=>m.week<d.week&&!d.completedMeets.includes(m.id)))return false;
-      const due=MEETS.filter(m=>m.week===d.week&&!d.completedMeets.includes(m.id));if(!Array.isArray(d.pendingMeets))return false;const queue=d.pendingMeet?[d.pendingMeet,...d.pendingMeets]:d.pendingMeets;if(queue.length!==due.length||queue.some((m,i)=>!obj(m)||Object.entries(due[i]).some(([key,value])=>m[key]!==value)))return false;if(!d.pendingMeet&&d.pendingMeets.length)return false;
+      const due=MEETS.filter(m=>m.week===d.week&&!d.completedMeets.includes(m.id));if(!Array.isArray(d.pendingMeets))return false;const queue=d.pendingMeet?[d.pendingMeet,...d.pendingMeets]:d.pendingMeets;if(queue.length!==due.length||queue.some((m,i)=>!obj(m)||Object.entries(due[i]).some(([key,value])=>!['rating','description'].includes(key)&&m[key]!==value)||!n(m.rating,0,120)||!str(m.description,500)))return false;if(!d.pendingMeet&&d.pendingMeets.length)return false;
       if(!Array.isArray(d.competedThisWeek)||new Set(d.competedThisWeek).size!==d.competedThisWeek.length||!d.competedThisWeek.every(id=>d.athletes.some(a=>a.id===id))||typeof d.monthPlanPending!=='boolean')return false;
       if(!Array.isArray(d.practiceCards)||d.practiceCards.length!==3||new Set(d.practiceCards.map(c=>c.id)).size!==3||!d.practiceCards.every(c=>{const ref=PRACTICE_CARDS.find(p=>p.id===c.id);return ref&&sameValue(c,ref);})||!d.practiceCards.some(c=>c.id===d.selectedPracticeCard))return false;
       if(!obj(d.medals)||!['gold','silver','bronze'].every(k=>n(d.medals[k],0,MAX_COUNT,true))||!obj(d.goal)||!['districtQualified','prefectureQualified','nationalsQualified','nationalsWon'].every(k=>typeof d.goal[k]==='boolean')||!(d.goal.wonYear===null||n(d.goal.wonYear,1,d.year,true)))return false;
       if(!Array.isArray(d.logs)||d.logs.length>100||!d.logs.every(l=>obj(l)&&n(l.year,1,d.year,true)&&n(l.week,1,48,true)&&str(l.text,500)))return false;
-      const validResult=r=>obj(r)&&findEvent(r.eventId)&&(!findEvent(r.eventId).gender||findEvent(r.eventId).gender===r.gender)&&['boys','girls'].includes(r.gender)&&r.divisionKey===r.gender+':'+r.eventId&&validId(r.athleteId)&&str(r.athleteName,80)&&record(r.value,r.eventId)&&n(r.rank,1,8,true)&&typeof r.qualified==='boolean'&&typeof r.newBest==='boolean'&&typeof r.official==='boolean'&&[null,'gold','silver','bronze'].includes(r.medal)&&str(r.formatted,30)&&n(r.prize,0,1e9)&&Array.isArray(r.participants)&&r.participants.length===8&&r.participants.every(p=>obj(p)&&str(p.name,80)&&str(p.school,40)&&record(p.value,r.eventId)&&n(p.rank,1,8,true)&&typeof p.isPlayer==='boolean')&&r.participants.filter(p=>p.isPlayer).length===1&&r.participants.some(p=>p.isPlayer&&p.athleteId===r.athleteId&&p.value===r.value&&p.rank===r.rank)&&(r.eventId!=='relay'||(Array.isArray(r.athleteIds)&&r.athleteIds.length===4&&new Set(r.athleteIds).size===4&&r.athleteIds.every(validId)&&Array.isArray(r.members)&&r.members.length===4&&r.members.every((m,i)=>m.athleteId===r.athleteIds[i]&&m.leg===i+1&&str(m.name,40)&&/^#[0-9a-fA-F]{6}$/.test(m.color)&&m.gender===r.gender)));
+      const validResult=r=>{
+        if(!obj(r)||!findEvent(r.eventId)||!(findEvent(r.eventId).gender==null||findEvent(r.eventId).gender===r.gender)||!['boys','girls'].includes(r.gender)||r.divisionKey!==r.gender+':'+r.eventId||!validId(r.athleteId)||!str(r.athleteName,80)||!record(r.value,r.eventId)||typeof r.qualified!=='boolean'||typeof r.newBest!=='boolean'||typeof r.official!=='boolean'||![null,'gold','silver','bronze'].includes(r.medal)||!str(r.formatted,30)||!n(r.prize,0,1e9)||!Array.isArray(r.participants))return false;
+        const count=r.participants.length;
+        if(!n(count,8,64,true)||!n(r.rank,1,count,true))return false;
+        const lower=findEvent(r.eventId).lowerBetter;
+        if(!r.participants.every((p,i)=>obj(p)&&str(p.athleteId,100)&&str(p.name,80)&&str(p.school,40)&&record(p.value,r.eventId)&&n(p.rank,1,count,true)&&typeof p.isPlayer==='boolean'&&(i===0?p.rank===1:(lower?p.value>=r.participants[i-1].value:p.value<=r.participants[i-1].value)&&p.rank===(p.value===r.participants[i-1].value?r.participants[i-1].rank:i+1))))return false;
+        if(new Set(r.participants.map(p=>p.athleteId)).size!==count||r.participants.filter(p=>p.isPlayer).length!==1||!r.participants.some(p=>p.isPlayer&&p.athleteId===r.athleteId&&p.value===r.value&&p.rank===r.rank))return false;
+        if(r.fieldSize===undefined){
+          if(count!==8||['schoolCount','qualificationPlaces','qualificationMark'].some(key=>r[key]!==undefined))return false;
+        }else{
+          if(r.fieldSize!==count||!n(r.schoolCount,1,count,true)||r.schoolCount!==new Set(r.participants.map(p=>p.school)).size||!n(r.qualificationPlaces,0,count,true))return false;
+          if(r.qualificationPlaces===0?r.qualificationMark!==null:r.qualificationMark!==r.participants[r.qualificationPlaces-1].value)return false;
+          if(r.qualified!==(r.official&&r.qualificationPlaces>0&&r.rank<=r.qualificationPlaces)||r.medal!==(r.official&&r.rank<=3?['gold','silver','bronze'][r.rank-1]:null))return false;
+        }
+        return r.eventId!=='relay'||(Array.isArray(r.athleteIds)&&r.athleteIds.length===4&&new Set(r.athleteIds).size===4&&r.athleteIds.every(validId)&&Array.isArray(r.members)&&r.members.length===4&&r.members.every((m,i)=>m.athleteId===r.athleteIds[i]&&m.leg===i+1&&str(m.name,40)&&/^#[0-9a-fA-F]{6}$/.test(m.color)&&m.gender===r.gender));
+      };
       const validMeet=m=>obj(m)&&MEETS.some(ref=>ref.id===m.id&&ref.week===m.week&&m.indoor===(ref.kind==='indoor')&&m.kind===ref.kind)&&str(m.name,80)&&n(m.year,1,d.year,true)&&Array.isArray(m.results)&&m.results.length<=20&&new Set(m.results.map(r=>r.divisionKey)).size===m.results.length&&m.results.every(r=>validResult(r)&&getMeetEvents(d,m.id).some(div=>div.key===r.divisionKey&&div.name===r.eventName&&div.category===r.category&&div.hurdleHeight===r.hurdleHeight)&&r.indoor===m.indoor)&&obj(m.summary)&&str(m.summary.title,120)&&str(m.summary.message,500)&&['prize','reputation','gold','silver','bronze'].every(k=>n(m.summary[k],0,1e9))&&typeof m.summary.qualified==='boolean'&&typeof m.summary.official==='boolean';
       if(!Array.isArray(d.history)||d.history.length>60||!d.history.every(validMeet)||(d.lastMeet!==null&&!validMeet(d.lastMeet)))return false;
       const validMode=id=>CAREER_MODES.some(mode=>mode.id===id), validGoal=id=>CAREER_GOALS.some(goal=>goal.id===id);
@@ -520,7 +590,7 @@
       return true;
     }catch(_){return false;}
   }
-  const api={VERSION,START_YEAR,EVENTS,INDIVIDUAL_EVENTS,RELAY_LEGS,TRAININGS,FOCUSES,PRACTICE_CARDS,FACILITIES,MEETS,STAT_KEYS,STAT_NAMES,GENDER_NAMES,INDOOR_STANDARDS,CAREER_GOALS,CAREER_MODES,createGame,getCalendar,getSchedule,getNextMeet,getMeetEvents,getEntryStatus,getEligibleAthletes,getRecordKey,getAge,advanceWeek,setTraining,setFocus,confirmMonthlyPlan,choosePracticeCard,setIntensity,upgradeFacility,recruitAthlete,scoutAthlete,getCandidates,runMeet,skipMeet,validateEntries,getAthleteRating,getSuitability,getRelayRating,predictResult,predictRelayResult,getDefaultTraining,formatResult,getFacilityCost,getSummary,validateSave,getCareer,chooseSeasonGoal,setSeasonMode};
+  const api={VERSION,START_YEAR,EVENTS,INDIVIDUAL_EVENTS,RELAY_LEGS,TRAININGS,FOCUSES,PRACTICE_CARDS,FACILITIES,MEETS,STAT_KEYS,STAT_NAMES,GENDER_NAMES,INDOOR_STANDARDS,CAREER_GOALS,CAREER_MODES,createGame,getCalendar,getSchedule,getNextMeet,getMeetEvents,getMeetField,getEntryStatus,getEligibleAthletes,getRecordKey,getAge,advanceWeek,setTraining,setFocus,confirmMonthlyPlan,choosePracticeCard,setIntensity,upgradeFacility,recruitAthlete,scoutAthlete,getCandidates,runMeet,skipMeet,validateEntries,getAthleteRating,getSuitability,getRelayRating,predictResult,predictRelayResult,getDefaultTraining,formatResult,getFacilityCost,getSummary,validateSave,getCareer,chooseSeasonGoal,setSeasonMode};
   for(const name of ['setTraining','setFocus','confirmMonthlyPlan','choosePracticeCard','setIntensity','upgradeFacility','recruitAthlete','scoutAthlete']) { const action=api[name];api[name]=(state,...args)=>{const result=action(state,...args);if(result.ok)ensureCareer(state);return result;}; }
   root.TrackGame=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof globalThis!=='undefined'?globalThis:window);

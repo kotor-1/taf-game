@@ -72,8 +72,10 @@ test('all-round goal grants its support fund once, independently of tournament p
 });
 
 test('individual personal-best goal counts first marks and spec improvements, excluding open marks', () => {
-  const s = G.createGame(2); advanceTo(s, 5); peak(s, 75);
-  assert.equal(G.runMeet(s, individualEntries(s), 'steady').ok, true);
+  const s = G.createGame(2); advanceTo(s, 5); peak(s, 85);
+  const district = G.runMeet(s, individualEntries(s), 'steady');
+  assert.equal(district.ok, true);
+  assert.ok(district.results.every(result => result.qualified), 'The fixture qualifies all twelve entrants for their second official marks');
   assert.equal(G.getCareer(s).goal.current, 12);
   advanceTo(s, 7); peak(s);
   const result = G.runMeet(s, individualEntries(s), 'steady');
@@ -103,17 +105,22 @@ test('relay goal needs both genders, with four named record holders retained', (
   assert.equal(G.validateSave(s), true);
 });
 
-for (const goalId of ['interhigh', 'champion']) test(`${goalId} goal requires an official Interhigh appearance/result`, () => {
-  const s = G.createGame(5); G.chooseSeasonGoal(s, goalId);
+for (const { goalId, seed, tactic, titles } of [
+  { goalId: 'interhigh', seed: 5, tactic: 'steady', titles: 0 },
+  { goalId: 'champion', seed: 1, tactic: 'aggressive', titles: 1 }
+]) test(`${goalId} goal requires an official Interhigh appearance/result`, () => {
+  const s = G.createGame(seed); G.chooseSeasonGoal(s, goalId);
   for (const week of [5, 7, 11]) {
     advanceTo(s, week); peak(s); G.runMeet(s, boys100(s), 'steady');
     assert.equal(G.getCareer(s).goal.rewarded, false);
   }
   advanceTo(s, 16); peak(s);
-  const result = G.runMeet(s, boys100(s), 'steady');
+  const result = G.runMeet(s, boys100(s), tactic);
+  assert.equal(result.results[0].official, true);
+  assert.equal(result.results[0].medal === 'gold', titles === 1, 'Appearance and championship goals exercise distinct outcomes');
   assert.equal(result.summary.careerReward, goalId === 'interhigh' ? 80000 : 100000);
-  assert.equal(G.getCareer(s).lifetime.interhighTitles, 1);
-  assert.equal(G.getCareer(s).lifetime.currentStreak, 1);
+  assert.equal(G.getCareer(s).lifetime.interhighTitles, titles);
+  assert.equal(G.getCareer(s).lifetime.currentStreak, titles);
   assert.equal(G.validateSave(s), true);
 });
 
@@ -157,12 +164,16 @@ test('challenge raises rivals by4 locally and8 nationally but preserves player p
   G.setSeasonMode(challenge, 'challenge');
   for (const week of [5, 7, 11, 16]) {
     for (const s of [normal, challenge]) { advanceTo(s, week); peak(s); }
+    const normalField = G.getMeetField(normal, 'boys:100m'), challengeField = G.getMeetField(challenge, 'boys:100m');
+    assert.equal(challengeField.cutoffRating - normalField.cutoffRating, week === 16 ? 8 : 4);
+    assert.equal(challengeField.participants, normalField.participants);
     const a = G.runMeet(normal, boys100(normal), 'steady').results[0];
     const b = G.runMeet(challenge, boys100(challenge), 'steady').results[0];
     assert.equal(a.value, b.value);
     for (const rival of a.participants.filter(p => !p.isPlayer)) {
       const other = b.participants.find(p => p.athleteId === rival.athleteId);
-      assert.ok(Math.abs((rival.value - other.value) - (week === 16 ? 8 : 4) * .062) < .011);
+      assert.ok(other, 'Both modes feature the same opponents');
+      assert.ok(other.value < rival.value, 'Challenge mode improves every opponent without relying on a linear record coefficient');
     }
     assert.equal(challenge.lastMeet.mode, 'challenge');
     assert.ok(G.getCareer(challenge).schoolRecords.every(r => r.mode === 'challenge'));

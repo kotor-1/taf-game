@@ -38,3 +38,26 @@
 @media(max-width:760px){.tutorial-welcome{flex-wrap:wrap;padding:18px;gap:12px}.tutorial-welcome-actions{width:100%;flex-direction:row;flex-wrap:wrap}.tutorial-welcome-actions .green{flex:1}.tutorial-panel{padding:18px}.tutorial-panel h2{font-size:17px}.tutorial-panel p{font-size:12px}.tutorial-finished{flex-wrap:wrap;padding:18px}.tutorial-finished .btn{width:100%}.tutorial-finished h2{font-size:16px}}
 @media(max-width:480px){.tutorial-emblem{display:none}.tutorial-welcome{padding:16px;margin-bottom:20px}.tutorial-welcome h2{font-size:17px}.tutorial-welcome p{font-size:11px}.tutorial-welcome-actions{gap:8px}.tutorial-welcome-actions .btn{font-size:11px;padding:10px 9px}.tutorial-panel{padding:15px;margin-bottom:20px}.tutorial-panel-head{gap:5px}.tutorial-pause{font-size:10px;padding:6px 2px}.tutorial-kicker{font-size:9px}.tutorial-kicker b{font-size:11px;margin-left:6px}.tutorial-panel h2{font-size:16px}.tutorial-panel p{font-size:12px;line-height:1.85}.tutorial-actions{gap:9px;align-items:stretch;flex-direction:column;margin-top:14px}.tutorial-actions .btn{font-size:11px;padding:10px}.tutorial-panel.compact{padding:13px 14px}.tutorial-panel.compact h2{font-size:15px}.tutorial-panel.compact p{font-size:11px}.tutorial-panel .tutorial-success{font-size:11px;padding:10px}.tutorial-help{padding:16px}.tutorial-help h3{font-size:17px}.tutorial-help p{font-size:11px}.tutorial-finished p{font-size:11px}}
 .sidebar-help{display:none}@media(max-width:760px){.sidebar-help{display:inline-flex;align-items:center;justify-content:center}.sidebar-footer{flex-direction:column;gap:9px}}
+
+/* Large meets retain every result while keeping the race excerpt and table readable. */
+.meet-field-info,.result-field-info{display:flex;gap:5px 14px;flex-wrap:wrap;font-size:10px;line-height:1.8;color:#738368}
+.meet-field-info{margin:9px 0 12px;padding:10px 12px;background:#eef3e6;border-radius:6px}
+.meet-field-info strong{font-size:10px;font-weight:600;color:#466d48}
+.relay-entry-panel>.meet-field-info{background:#e7efdc;margin-top:13px}
+.result-field-info{margin:-3px 0 12px}
+.race-field-note{text-align:center;font-size:10px;line-height:1.8;color:#76846d;margin:5px 0 8px}
+.result-actions{display:grid;grid-template-columns:minmax(0,1fr) auto}
+.result-actions .result-expand[open]{grid-column:1/-1;grid-row:2}
+.result-actions .result-expand[open]+.replay-event{grid-column:2;grid-row:1;justify-self:end}
+.ranking-scroll{max-height:340px;max-height:min(340px,48dvh);overflow:auto;overscroll-behavior:contain;margin-top:10px;border:1px solid #e4ead9;border-radius:6px;scrollbar-gutter:stable}
+.ranking-scroll:focus-visible{outline:3px solid #da9c43;outline-offset:2px}
+.ranking-scroll .ranking-table{margin-top:0;table-layout:fixed}
+.ranking-table th:first-child,.ranking-table td:first-child{width:44px;text-align:center}
+.ranking-table th:last-child,.ranking-table td:last-child{width:92px;text-align:right;padding-right:10px;white-space:nowrap}
+.ranking-table th{position:sticky;top:0;z-index:1;background:#f1f5e9;box-shadow:0 1px 0 #dfe6d5;padding-top:10px;padding-bottom:10px}
+.ranking-table td:nth-child(2){overflow-wrap:anywhere}
+.ranking-school{display:block;font-size:9px;color:#829177}
+.ranking-player,.ranking-qualifier{display:inline-block;padding:1px 4px;border-radius:3px;font-size:8px;line-height:1.5;vertical-align:middle}
+.ranking-player{background:#dce8c9;color:#4e6c3e;margin-right:5px}
+.ranking-qualifier{background:#e2eee6;color:#476e58;margin-left:5px}
+@media(max-width:480px){.meet-field-info,.result-field-info{gap:3px 10px;font-size:9px}.meet-field-info strong{font-size:9px}.ranking-table{font-size:10px}.ranking-table th:first-child,.ranking-table td:first-child{width:36px}.ranking-table th:last-child,.ranking-table td:last-child{width:76px;padding-right:6px}.race-field-note{font-size:9px}}

@@ -101,7 +101,7 @@ function runCampaign(strategy,years){
       const outcome=Object.keys(entries).length?success(G.runMeet(state,entries,strategy.tactic),'meet '+id):success(G.skipMeet(state),'skip '+id);
       metrics.meets++;if(Object.keys(entries).length){metrics.entered++;meetCoverage.add(id);}else metrics.skipped++;
       metrics.results+=outcome.results.length;if(indoor)metrics.indoorStarts+=outcome.results.length;
-      for(const r of outcome.results){divisionCoverage.add(r.divisionKey);assert.ok(Number.isFinite(r.value));assert.equal(r.participants.length,8);}
+      for(const r of outcome.results){divisionCoverage.add(r.divisionKey);assert.ok(Number.isFinite(r.value));assert.equal(r.participants.length,G.getMeetField(state,r.divisionKey,id).participants);assert.equal(r.fieldSize,r.participants.length);}
       validate('meet '+id);
       continue;
     }

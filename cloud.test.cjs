@@ -232,3 +232,18 @@ test('the cloud deadline also covers a stalled large-save response body',async()
   f.setRoute(()=>({ok:true,status:200,json:()=>new Promise(()=>{})}));
   await assert.rejects(f.cloud.load(),{code:'network'});assert.equal(f.cloud.getStatus().user.id,A.id);
 });
+test('save transfers can outlast the authentication deadline while remaining bounded',async()=>{
+  const f=fixture({timeoutMs:10,create:{saveTimeoutMs:200}});await f.cloud.init();
+  f.setRoute(async(url,init)=>{
+    await new Promise(resolve=>setTimeout(resolve,35));
+    if(url.includes('/rpc/taf_save_game'))return f.reply({revision:JSON.parse(init.body).p_expected_revision+1,updated_at:stamp});
+    return f.reply([{user_id:A.id,payload:payload(),revision:3,updated_at:stamp}]);
+  });
+  assert.equal((await f.cloud.save(payload(),2)).revision,3);
+  assert.equal((await f.cloud.load()).revision,3);
+  await assert.rejects(f.cloud.changePassword('a secure replacement password'),{code:'network'});
+  const short=fixture({timeoutMs:100,create:{saveTimeoutMs:10}});await short.cloud.init();
+  short.setRoute(()=>({ok:true,status:200,json:()=>new Promise(()=>{})}));
+  await assert.rejects(short.cloud.save(payload(),2),{code:'network'});
+  assert.equal(short.cloud.getStatus().user.id,A.id);
+});

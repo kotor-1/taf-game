@@ -115,7 +115,18 @@
     }
 
     setMode(mode = 'practice', data) {
-      this.mode = mode; this.race = data || null; this.raceStarted = performance.now(); this.draw(this.raceStarted);
+      this.mode = mode;
+      this.race = mode === 'race' && data ? { ...data, runners: TrackScene.selectHighlightRunners(data.runners) } : data || null;
+      this.raceStarted = performance.now(); this.draw(this.raceStarted);
+    }
+
+    static selectHighlightRunners(runners) {
+      if (!Array.isArray(runners)) return [];
+      // A highlight is an excerpt around our athlete, not a simulated heat.
+      // Keep the overall result intact and use local positions only for animation.
+      const playerIndex = Math.max(0, runners.findIndex(runner => runner.isPlayer));
+      const start = clamp(playerIndex - 3, 0, Math.max(0, runners.length - 8));
+      return runners.slice(start, start + 8).map((runner, index) => ({ ...runner, overallPlace: runner.overallPlace ?? runner.place ?? start + index + 1, place: index + 1 }));
     }
 
     renderBackground() {
@@ -572,7 +583,7 @@
         return;
       }
       const sprites=runners.slice(0,12).map((a,i)=>{
-        const lane=i%6, energy=Number.isFinite(a.energy)?clamp(a.energy,0,100):100;
+        const lane=raceMode?i*5/Math.max(1,runners.length-1):i%6, energy=Number.isFinite(a.energy)?clamp(a.energy,0,100):100;
         const speed=(.010+((Number(a.stats?.speed ?? a.speed)||50)/100)*.006)*(.55+energy*.0045);
         let phase=i*.126+t*speed;
         if(raceMode){const rank=Number(a.place)||i+1;phase=.505+Math.min(1,raceProgress*(1+(runners.length-rank)*.006));}
