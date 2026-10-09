@@ -1,8 +1,8 @@
 {
   "name": "hokago-track-club",
-  "version": "2.4.0",
+  "version": "3.0.0",
   "private": true,
-  "description": "高校陸上の育成・経営シミュレーション『放課後トラック部』",
+  "description": "高校陸上部の育成シミュレーション。7日間の練習と個別指導で全国へ。",
   "scripts": {
     "start": "node server.mjs",
     "dev": "node server.mjs",
@@ -14,7 +14,8 @@
     "test:career": "node browser-career.cjs",
     "test:storage": "node browser-storage.cjs",
     "test:tutorial": "node browser-tutorial.cjs",
-    "test:fields": "node browser-field.cjs"
+    "test:fields": "node browser-field.cjs",
+    "test:journey": "node browser-journey.cjs"
   },
   "engines": {
     "node": ">=18"

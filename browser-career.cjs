@@ -32,7 +32,7 @@ function campaign(){
       }
       assert.equal((Object.keys(entries).length?E.runMeet(s,entries,'steady'):E.skipMeet(s)).ok,true);continue;
     }
-    for(const f of E.FACILITIES){const cost=E.getFacilityCost(s,f.id);if(cost&&s.money>cost+50000)E.upgradeFacility(s,f.id);}
+    for(const f of E.FACILITIES){if(E.getFacilityPlan(s).available&&s.facilities[f.id]<5)assert.equal(E.upgradeFacility(s,f.id).ok,true);}
     for(const a of s.athletes){
       const event=E.EVENTS.find(e=>e.id===E.getSuitability(a)[0].eventId);
       E.setTraining(s,a.id,a.energy<65?'rest':E.getDefaultTraining(event.id));
@@ -61,7 +61,11 @@ function campaign(){
       await nav(page,'training');
       await action(page,'auto-focus');s=await read(page);assert.ok(s.athletes.every(a=>E.FOCUSES.some(f=>f.id===a.focus)));
       await action(page,'monthly-plan');await action(page,'confirm-plan');
-      await action(page,'advance');await action(page,'close');
+      await action(page,'start-training');await page.locator('#practice-dialog[open]').waitFor();
+      if(!await page.locator('[data-training-action="decide"]:visible').count())await page.locator('[data-training-action="skip"]').click();
+      await page.locator('[data-training-action="decide"][data-decision="balanced"]').click();
+      if(await page.locator('#practice-dialog').getAttribute('data-phase')!=='finish')await page.locator('[data-training-action="skip"]').click();
+      await page.locator('.practice-finish-action [data-training-action="close"]').click();await page.locator('.academy-summary').waitFor();
       await nav(page,'career');assert.equal(await page.locator('[data-action="season-mode"]:not([disabled])').count(),0);
       await page.reload();await page.locator('#campus').waitFor();s=await read(page);assert.equal(s.career.season.mode,'challenge');assert.equal(s.week,2);
       await page.locator('#import-save').setInputFiles({name:'mature.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(mature))});

@@ -289,7 +289,7 @@ test('October scouting reserves a middle-school student for next April and never
   const count = state.athletes.length, money = state.money;
   assert.equal(G.recruitAthlete(state, recruit.id).ok, true);
   assert.equal(state.athletes.length, count);
-  assert.equal(state.money, money - recruit.cost);
+  assert.equal(state.money, money);
   assert.ok(state.scouted.some(a => a.id === recruit.id));
   const snapshot = clone(state);
   assert.equal(G.recruitAthlete(state, recruit.id).ok, false);
@@ -420,7 +420,7 @@ test('qualification belongs to the individual event, and open results cannot ear
   assert.equal(G.validateSave(state), true);
 });
 
-test('practice cards and workload trade money and fatigue for growth, while rest heals', () => {
+test('legacy practice selections map to free weekly routes with growth/fatigue tradeoffs, while rest heals', () => {
   let camp;
   for (let seed = 1; seed <= 50 && !camp; seed++) {
     const candidate = G.createGame(seed);
@@ -436,7 +436,9 @@ test('practice cards and workload trade money and fatigue for growth, while rest
   for (const state of [camp, normal]) { confirmPlan(state); assert.equal(G.advanceWeek(state).ok, true); }
   assert.ok(camp.athletes[0].stats.speed > normal.athletes[0].stats.speed);
   assert.ok(camp.athletes[0].energy < normal.athletes[0].energy);
-  assert.equal(camp.lastReport.expenses - normal.lastReport.expenses, 8000);
+  assert.equal(camp.lastReport.expenses, 0);
+  assert.equal(normal.lastReport.expenses, 0);
+  assert.equal(camp.money, 0);
   assert.equal(camp.practiceCards.length, 3);
   assert.equal(camp.selectedPracticeCard, 'basic');
   const athlete = camp.athletes[0];

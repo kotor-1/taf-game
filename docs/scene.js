@@ -61,6 +61,48 @@
     ctx.restore();
   }
 
+  // Training sprites share the same kit and face as racing athletes, but have
+  // distinct poses so a weight session never looks like another lap of the oval.
+  function trainingPerson(c, x, y, a, pose, cycle, selected = false, direction = 1, scale = 1.35) {
+    const color=a.color||a.kitColor||'#e7a55d',skin=a.skinColor||'#efc397',hair=a.hairColor||'#43524b';
+    if(pose==='run'||pose==='walk')return person(c,x,y,color,cycle,direction,scale,hair,skin,selected,a.gender);
+    c.save();c.translate(Math.round(x),Math.round(y));c.scale(scale,scale);
+    oval(c,0,1,selected?7:5,selected?2:1.5,selected?'#ffe5a2':'#354b5728');
+    const wave=(Math.sin(cycle)+1)/2,squat=pose==='lift'?wave*3:0;
+    if(pose==='stretch'||pose==='sit'){
+      rect(c,-2,-7,4,5,color);rect(c,-2,-3,5,3,'#354b57');
+      rect(c,1,-1,7,2,skin);rect(c,7,-1,3,2,'#fff1d1');
+      rect(c,-3,-1,3,3,skin);rect(c,-4,1,3,1,'#fff1d1');
+      line(c,pose==='stretch'?[[0,-6],[4+wave,-3],[8,-2]]:[[-2,-6],[-4,-2]],skin,2);
+      rect(c,-2,-12,5,5,skin);rect(c,-2,-13,5,2,hair);
+    }else{
+      const lift=pose==='jump'?Math.sin(wave*Math.PI)*3:0, torso=-8+squat-lift;
+      rect(c,-2,torso,5,6,color);rect(c,-1,torso+1,1,4,'#ffffff55');rect(c,-2,torso+5,5,3,'#354b57');
+      rect(c,-2,torso-5,5,5,skin);rect(c,-3,torso-6,6,2,hair);
+      rect(c,direction>0?2:-2,torso-3,1,1,'#3e5149');
+      if(pose==='knee'){
+        line(c,[[-1,torso+7],[-2,0],[-4,1]],skin,2);line(c,[[2,torso+7],[7,-5-wave*3],[7,-1-wave*3]],skin,2);
+        rect(c,6,-1-wave*3,4,1,'#fff1d1');line(c,[[-3,torso+2],[-5,torso-1]],skin,2);line(c,[[4,torso+1],[6,torso+5]],skin,2);
+      }else if(pose==='hurdle'){
+        line(c,[[1,torso+7],[8,torso+6],[10,torso+7]],skin,2);line(c,[[-1,torso+7],[-6,torso+9],[-8,torso+6]],skin,2);
+        rect(c,9,torso+7,3,1,'#fff1d1');line(c,[[3,torso+1],[8,torso+2]],skin,2);line(c,[[-3,torso+1],[-5,torso-1]],skin,2);
+      }else{
+        line(c,[[-1,torso+7],[-3-squat*.3,-1],[-5,1]],skin,2);line(c,[[2,torso+7],[4+squat*.3,-1],[5,1]],skin,2);
+        rect(c,-6,1,4,1,'#fff1d1');rect(c,3,1,4,1,'#fff1d1');
+        if(pose==='lift'){
+          const ballY=torso-6+wave*8;line(c,[[-3,torso+1],[-4,ballY],[0,ballY]],skin,2);line(c,[[4,torso+1],[5,ballY],[1,ballY]],skin,2);
+          oval(c,0,ballY-1,4,4,'#607d87');rect(c,-2,ballY-3,4,1,'#96b4b2');
+        }else if(pose==='cheer'||pose==='jump'){
+          line(c,[[-3,torso+1],[-6,torso-4]],skin,2);line(c,[[4,torso+1],[7,torso-4]],skin,2);
+        }else{
+          line(c,[[-3,torso+1],[-5,torso+5]],skin,2);line(c,[[4,torso+1],[7,torso+3]],skin,2);
+        }
+      }
+    }
+    if(isFemale(a.gender)){rect(c,-5,pose==='stretch'||pose==='sit'?-12:-13+squat,2,5,hair);rect(c,-5,pose==='stretch'||pose==='sit'?-12:-13+squat,2,1,color);}
+    c.restore();
+  }
+
   class TrackScene {
     constructor(canvas) {
       this.canvas = canvas;
@@ -69,6 +111,7 @@
       this.g = this.pixel.getContext('2d');
       this.landscape = document.createElement('canvas'); this.landscape.width = W; this.landscape.height = H;
       this.state = {}; this.mode = 'practice'; this.race = null; this.raceStarted = 0; this.hitAreas = [];
+      this.training = null; this.trainingTime = 0; this.trainingFrame = 0; this.trainingFinished = 0;
       this.season = 'spring'; this.schoolName = '青葉高校'; this.selectedId = null; this.hovered = null; this.lastFrame = 0; this.alive = true;
       this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || false;
       this.renderBackground();
@@ -117,7 +160,27 @@
     setMode(mode = 'practice', data) {
       this.mode = mode;
       this.race = mode === 'race' && data ? { ...data, runners: TrackScene.selectHighlightRunners(data.runners) } : data || null;
-      this.raceStarted = performance.now(); this.draw(this.raceStarted);
+      this.raceStarted = performance.now();
+      if(mode==='training'){
+        this.training={blockId:'speed',day:1,progress:0,phase:'work',paused:false,...data};
+        this.trainingTime=0;this.trainingFrame=this.raceStarted;this.trainingFinished=this.raceStarted;
+      }else this.training=null;
+      this.draw(this.raceStarted);
+    }
+
+    updateTraining(data = {}) {
+      if(this.mode!=='training')return;
+      const now=performance.now();
+      // Account for time under the old state before pausing or changing days.
+      this.advanceTrainingClock(now);
+      if(data.phase==='finish'&&this.training.phase!=='finish')this.trainingFinished=now;
+      this.training={...this.training,...data};
+      this.draw(now);
+    }
+
+    advanceTrainingClock(time) {
+      if(this.training&&!this.reducedMotion&&!this.training.paused&&this.training.phase==='work')this.trainingTime+=clamp((time-this.trainingFrame)/1000,0,.12)*clamp(Number(this.training.playbackRate)||1,1,4);
+      this.trainingFrame=time;
     }
 
     static selectHighlightRunners(runners) {
@@ -247,6 +310,157 @@
       if(d<curve){const a=-Math.PI/2+d/rx;return{x:361+Math.cos(a)*rx,y:183+Math.sin(a)*ry,dx:-Math.sin(a)};} d-=curve;
       if(d<straight)return{x:361-d,y:183+ry,dx:-1};d-=straight;
       const a=Math.PI/2+d/rx;return{x:139+Math.cos(a)*rx,y:183+Math.sin(a)*ry,dx:-Math.sin(a)};
+    }
+
+    drawTraining(c, time, athletes) {
+      this.advanceTrainingClock(time);
+      const session=this.training||{},block=['load','speed','aerobic','skill','mobility','recovery'].includes(session.blockId)?session.blockId:'speed';
+      const day=clamp(Number(session.day)||1,1,7),progress=clamp(Number(session.progress)||0,0,1),t=this.trainingTime;
+      const finished=session.phase==='finish',waiting=session.phase==='decision'||session.paused,spotlightId=session.spotlightId??this.selectedId;
+      const titles={load:'筋力・ジャンプ',speed:'加速・スプリント',aerobic:'持久走・ペースづくり',skill:'ハードル・バトン技術',mobility:'動きづくり・ドリル',recovery:'回復・コンディショニング'};
+      const cues={load:'押す力を、走りにつなぐ',speed:'加速 → 最高速度 → 歩いて回復',aerobic:'無理のないペースで、仲間と走る',skill:'リズムを刻んで、仲間につなぐ',mobility:'動作をゆっくり、正確に',recovery:'休むことも、強くなるための練習'};
+      const roster=athletes.slice(0,24),spotlight=athletes.find(a=>a.id===spotlightId);
+      if(spotlight&&!roster.includes(spotlight))roster[roster.length-1]=spotlight;
+      const stat=(a,key)=>clamp(Number(globalThis.TrackGame?.getStat?.(a,key)??a.stats?.[key]??a[key])||50,0,100);
+      const sprites=[];
+      const label=(text,x,y,color='#496551')=>{c.font='6px sans-serif';c.textAlign='center';c.fillStyle=color;c.fillText(text,x,y);};
+      const cone=(x,y)=>{poly(c,[[x,y-5],[x-3,y+1],[x+3,y+1]],'#e6a35f');rect(c,x-1,y-2,3,1,'#ffe3ad');rect(c,x-4,y+1,9,1,'#aa7550');};
+      const hurdle=(x,y)=>{rect(c,x-6,y-10,13,2,'#fff0ca');rect(c,x-6,y-10,4,2,'#6a9696');rect(c,x+3,y-10,4,2,'#6a9696');rect(c,x-6,y-8,1,10,'#6d887c');rect(c,x+6,y-8,1,10,'#6d887c');rect(c,x-8,y+1,5,1,'#6d887c');rect(c,x+4,y+1,5,1,'#6d887c');};
+      if(block!=='aerobic'){
+        rect(c,0,113,W,147,block==='recovery'?'#a6bd8a':'#b6bd8c');rect(c,0,113,W,8,'#e0d3ad');
+        for(let i=0;i<90;i++)rect(c,hash(i+673)*W,126+hash(i+331)*130,2,1,i%3?'#78996625':'#d9d99e40');
+      }
+      if(block==='speed'){
+        rect(c,24,134,452,106,'#b97660');rect(c,25,135,450,103,'#d58c70');
+        for(let lane=0;lane<=6;lane++)line(c,[[25,136+lane*17],[475,136+lane*17]],'#f4d6aa');
+        line(c,[[57,136],[57,238]],'#fff2d0',2);line(c,[[437,136],[437,238]],'#fff2d0',2);
+        for(let lane=0;lane<6;lane++){label(String(lane+1),36,147+lane*17,'#ffe2b5');cone(449,143+lane*17);}
+        // Pair each hard acceleration with a visible walking recovery.
+        roster.forEach((a,i)=>{
+          const cycle=(t*(.115+stat(a,'speed')*.00035)+i*.317)%1,lane=i%6;
+          const running=cycle<.63,u=running?cycle/.63:(cycle-.63)/.37;
+          const x=running?57+370*Math.pow(u,1.45):427-370*u,y=147+lane*17;
+          sprites.push({a,i,x,y,pose:running?'run':'walk',frame:t*(running?17:5)+i,direction:running?1:-1,streak:running&&u>.3});
+        });
+        label('START',57,128);label('FINISH',436,128);
+      }else if(block==='aerobic'){
+        // Paced groups use the whole oval; cadence and speed differ from sprinting.
+        for(let i=0;i<4;i++){const point=this.trackPoint(.07+i*.25,0);poly(c,[[point.x-3,point.y-1],[point.x+4,point.y],[point.x-3,point.y+1]],'#ecdfa7');}
+        rect(c,225,163,49,22,'#e2d7b1');rect(c,228,166,43,16,'#4e7460');
+        label('PACE',249,173,'#d3e3b8');label('会話できる強度',249,181,'#fff1ce');
+        for(let i=0;i<4;i++){rect(c,283+i*4,178,2,6,'#78a2a3');rect(c,283+i*4,176,2,2,'#f0e5c1');}
+        person(c,277,190,'#f5e9c9',0,-1,1.25);
+        roster.forEach((a,i)=>{
+          const point=this.trackPoint(i*.058+t*(.020+stat(a,'stamina')*.00012),1+i%4);
+          sprites.push({a,i,...point,pose:'run',frame:t*8+i,direction:point.dx>0?1:-1,scale:1.08});
+        });
+      }else if(block==='load'){
+        for(let row=0;row<3;row++)for(let col=0;col<4;col++){
+          const x=76+col*114,y=150+row*37;
+          poly(c,[[x-25,y-5],[x+21,y-5],[x+28,y+13],[x-22,y+13]],'#8aa6a0');line(c,[[x-23,y-4],[x+20,y-4]],'#bed0b6');
+          if((row+col)%2){rect(c,x+12,y-8,12,12,'#b98d58');rect(c,x+12,y-8,12,3,'#efd1a0');rect(c,x+21,y-5,3,9,'#a2784f');}
+        }
+        label('メディシンボール',130,127);label('ジャンプ・着地',365,127);
+        roster.forEach((a,i)=>{
+          const cell=i%12,col=cell%4,row=Math.floor(cell/4),jump=(row+col)%2,cycle=(t*.43+i*.23)%1;
+          const jumping=cycle>.18&&cycle<.70,q=clamp((cycle-.18)/.52,0,1);
+          const x=76+col*114+(jump?Math.sin(q*Math.PI)*9:0)+(i>=12?28:0),y=150+row*37-(jump&&jumping?Math.sin(q*Math.PI)*19:0);
+          sprites.push({a,i,x,y,pose:jump?(jumping?'jump':'stand'):'lift',frame:t*3+i,groundY:150+row*37});
+        });
+      }else if(block==='skill'){
+        rect(c,25,134,450,64,'#cd9071');
+        for(let lane=0;lane<3;lane++)line(c,[[25,135+lane*30],[475,135+lane*30]],'#f6dcb3');
+        for(let lane=0;lane<2;lane++)for(let j=0;j<5;j++)hurdle(108+j*72,157+lane*30);
+        rect(c,25,210,450,27,'#d99979');line(c,[[25,213],[475,213]],'#f5d9ac');line(c,[[25,235],[475,235]],'#f5d9ac');
+        for(let j=0;j<3;j++){rect(c,103+j*143,213,27,22,'#e7b87088');line(c,[[103+j*143,213],[103+j*143,234]],'#f9e4b6');}
+        label('一定のリズムで越える',160,128);label('バトンは手から手へ',351,205);
+        roster.forEach((a,i)=>{
+          if(i%4<2){
+            const cycle=(t*.10+i*.21)%1,x=51+403*cycle,y=157+(i%2)*30;
+            const near=108+Math.round((x-108)/72)*72,hop=Math.abs(x-near)<13&&near>=108&&near<=396;
+            const lift=hop?Math.sin((x-near+13)/26*Math.PI)*16:0;
+            sprites.push({a,i,x,y:y-lift,pose:hop?'hurdle':'run',frame:t*12+i,groundY:y,direction:1});
+          }else{
+            const pair=Math.floor(i/4)%3,outgoing=i%4===3,cycle=(t*.20+pair*.21)%1;
+            const x=outgoing?112+pair*143+Math.max(0,cycle-.45)*115:58+pair*143+Math.min(.72,cycle)*116;
+            const handoff=cycle>.45&&cycle<.67;
+            sprites.push({a,i,x,y:226,pose:cycle<.45&&outgoing?'stand':'run',frame:t*10+i,direction:1,baton:outgoing?cycle>=.57:cycle<.57,handoff});
+          }
+        });
+      }else if(block==='mobility'){
+        for(let row=0;row<3;row++)for(let col=0;col<4;col++){
+          const x=75+col*114,y=153+row*36;
+          if(col%2){line(c,[[x-24,y+5],[x+23,y+5]],'#f2ddb1',2);line(c,[[x-24,y+10],[x+23,y+10]],'#f2ddb1',2);for(let rung=0;rung<7;rung++)line(c,[[x-23+rung*7,y+5],[x-23+rung*7,y+10]],'#dbae6d');}
+          else {poly(c,[[x-22,y-5],[x+20,y-5],[x+25,y+13],[x-20,y+13]],'#8fa995');cone(x-26,y+6);cone(x+27,y+6);}
+        }
+        label('可動域・バランス',132,128);label('ラダー・リズム',367,128);
+        roster.forEach((a,i)=>{
+          const cell=i%12,col=cell%4,row=Math.floor(cell/4),ladder=col%2;
+          sprites.push({a,i,x:75+col*114+(ladder?Math.sin(t*2+i)*18:0)+(i>=12?27:0),y:153+row*36,pose:ladder?'run':i%3?'knee':'stretch',frame:t*(ladder?8:2)+i});
+        });
+      }else{
+        for(let row=0;row<3;row++)for(let col=0;col<4;col++){
+          const x=74+col*114,y=155+row*35;
+          poly(c,[[x-24,y-4],[x+23,y-4],[x+28,y+12],[x-20,y+12]],(col+row)%2?'#89b4ac':'#aec695');
+          line(c,[[x-21,y-2],[x+22,y-2]],'#d1dfb4');rect(c,x+31,y-1,3,7,'#87aeb1');rect(c,x+31,y-3,3,2,'#f5e8c3');
+        }
+        label('水分補給',128,128);label('ゆったり、呼吸を整える',356,128);
+        roster.forEach((a,i)=>{
+          const cell=i%12,col=cell%4,row=Math.floor(cell/4);
+          sprites.push({a,i,x:74+col*114+(i>=12?27:0),y:155+row*35,pose:i%3?'stretch':'sit',frame:t*1.6+i,breathing:true});
+        });
+      }
+      // An injury always shows a recovery pose, regardless of the club's session.
+      sprites.forEach((s,i)=>{if(s.a.injury>0){s.x=28+(i%4)*16;s.y=237;s.pose='sit';s.streak=false;s.baton=false;s.injured=true;}});
+      const visibleTime=finished&&!this.reducedMotion?Math.max(0,(time-this.trainingFinished)/1000):0;
+      sprites.sort((a,b)=>(a.groundY??a.y)-(b.groundY??b.y)).forEach(s=>{
+        const selected=s.a.id===spotlightId||this.hovered?.id===s.a.id;
+        if(s.groundY>s.y)oval(c,s.x,s.groundY+2,6,2,'#46594724');
+        if(s.streak&&!waiting&&!finished){line(c,[[s.x-15,s.y-6],[s.x-9,s.y-6]],'#f6d3a6');line(c,[[s.x-19,s.y-10],[s.x-13,s.y-10]],'#f4caa0');}
+        trainingPerson(c,s.x,s.y,s.a,finished&&!s.injured?'cheer':s.pose,s.frame,selected,s.direction||1,s.scale||1.25);
+        if(s.baton){rect(c,s.x+5,s.y-10,5,2,'#f9d866');rect(c,s.x+5,s.y-10,2,1,'#fff1b8');}
+        if(s.handoff&&!finished)oval(c,s.x+8,s.y-10,3,3,'#ffeab855');
+        if(s.breathing&&!waiting&&!finished){const rise=(t*.35+s.i*.19)%1;rect(c,s.x+12,s.y-12-rise*6,2,2,'#e8f2d5');}
+        if(s.injured){rect(c,s.x-1,s.y-22,2,6,'#bb725e');rect(c,s.x-3,s.y-20,6,2,'#bb725e');}
+        if(selected){
+          const bob=waiting||this.reducedMotion?0:Math.sin(t*3)*1.5;
+          poly(c,[[s.x-4,s.y-26+bob],[s.x+4,s.y-26+bob],[s.x,s.y-21+bob]],'#ffdc79');
+        }
+        if(finished){
+          for(let j=0;j<3;j++){
+            const angle=j*TAU/3+visibleTime*.8,radius=9+(j%2)*6,x=s.x+Math.cos(angle)*radius,y=s.y-13+Math.sin(angle)*radius*.6;
+            line(c,[[x-2,y],[x+2,y]],'#ffe7a0');line(c,[[x,y-2],[x,y+2]],'#ffe7a0');
+          }
+        }
+        this.hitAreas.push({x:s.x,y:s.y,id:s.a.id,name:s.a.name||'陸上部員'});
+      });
+      // A single nameplate tracks the athlete being coached, keeping crowded
+      // sessions readable while every visible athlete remains clickable.
+      const marker=this.hitAreas.find(s=>s.id===(this.hovered?.id??spotlightId));
+      if(marker){
+        c.font='bold 6px sans-serif';const text=String(marker.name).slice(0,20),width=Math.min(128,c.measureText(text).width+12),x=clamp(marker.x-width/2,4,W-width-4),y=clamp(marker.y-40,112,220);
+        rect(c,x,y,width,12,'#305848');rect(c,x,y,width,1,'#f4cf78');c.fillStyle='#fff0ca';c.textAlign='center';c.fillText(text,x+width/2,y+8);
+      }
+      if(finished){
+        for(let i=0;i<30;i++){
+          const x=20+hash(i+302)*460,y=70+((hash(i+733)*166+visibleTime*(12+hash(i)*8))%164);
+          rect(c,x+(this.reducedMotion?0:Math.sin(visibleTime+i)*3),y,i%3?2:3,2,['#f6d67d','#e4afa2','#c8ddaa','#a1cac6'][i%4]);
+        }
+      }
+      // The overlay is legible at both mobile and desktop canvas sizes.
+      rect(c,13,12,474,45,'#244f44ed');rect(c,14,13,472,43,'#355f4f');rect(c,14,13,3,43,'#f0c574');
+      c.font='bold 7px monospace';c.textAlign='left';c.fillStyle='#cfddb4';c.fillText(`DAY ${day} / 7`,25,26);
+      c.font='bold 11px sans-serif';c.fillStyle='#fff1ce';c.fillText(titles[block],25,44);
+      c.textAlign='right';c.font='7px sans-serif';c.fillStyle=waiting?'#ffdc93':'#dce7c6';
+      c.fillText(finished?'今週の練習 完了！':session.phase==='decision'?'コーチの判断を待っています':session.paused?'練習を一時停止中':'LIVE TRAINING',474,26);
+      c.font='6px sans-serif';c.fillStyle='#eadcba';c.fillText(spotlight?`${String(spotlight.name).slice(0,18)}を見守っています`:cues[block],474,43);
+      // progress describes the entire seven-day course; decisions never
+      // advance it on the renderer's own clock.
+      rect(c,13,244,474,11,'#315849e8');
+      for(let i=0;i<7;i++){
+        const x=17+i*67;rect(c,x,247,62,4,'#6b8972');rect(c,x,247,62*clamp(progress*7-i,0,1),4,'#edc573');
+        if(i===day-1&&!finished)rect(c,x,252,62,1,'#fff0c4');
+      }
     }
 
     drawIndoorHall(c) {
@@ -572,6 +786,11 @@
       c.imageSmoothingEnabled=false;c.clearRect(0,0,W,H);c.drawImage(this.landscape,0,0);
       this.hitAreas=[];
       const athletes=Array.isArray(this.state.athletes)?this.state.athletes:Array.isArray(this.state.team)?this.state.team:[];
+      if(this.mode==='training'){
+        this.drawTraining(c,time,athletes);
+        this.ctx.imageSmoothingEnabled=false;this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);this.ctx.drawImage(this.pixel,0,0,this.canvas.width,this.canvas.height);
+        return;
+      }
       const raceMode=this.mode==='race' && this.race?.runners?.length;
       const runners=raceMode?this.race.runners:athletes.length?athletes:Array.from({length:6},(_,i)=>({id:`demo-${i}`,name:'陸上部員',color:PALETTE[i]}));
       const raceProgress=raceMode?clamp((time-this.raceStarted)/(this.race.duration||8000),0,1):0;

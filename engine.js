@@ -5,8 +5,24 @@
   const START_YEAR = 2026;
   const MAX_COUNT = Number.MAX_SAFE_INTEGER;
   const MAX_YEAR = MAX_COUNT - START_YEAR - 2;
-  const STAT_KEYS = ['speed', 'stamina', 'power', 'technique', 'agility', 'flexibility', 'mental'];
-  const STAT_NAMES = { speed: 'スピード', stamina: '持久力', power: 'パワー', technique: '技術', agility: '敏捷性', flexibility: '柔軟性', mental: '精神力' };
+  const LEGACY_STAT_KEYS = ['speed', 'stamina', 'power', 'technique', 'agility', 'flexibility', 'mental'];
+  const STAT_KEYS = ['acceleration', 'speed', 'speedEndurance', 'stamina', 'power', 'agility', 'flexibility', 'technique', 'mental'];
+  const STAT_NAMES = { acceleration: '加速力', speed: '最高速度', speedEndurance: 'スピード持久力', stamina: '有酸素持久力', power: '瞬発力', agility: '動作制御', flexibility: '可動性', technique: '種目技術', mental: '集中力' };
+  // Legacy attributes remain readable without changing a loaded save. New
+  // dimensions are derived from related capacities, never initialized to zero.
+  function getStat(athlete, key) {
+    const s = athlete?.stats || {};
+    if (Number.isFinite(s[key])) return s[key];
+    if (key === 'acceleration') return round((Number(s.speed) || 0) * .5 + (Number(s.power) || 0) * .3 + (Number(s.agility) || 0) * .2);
+    if (key === 'speedEndurance') return round((Number(s.speed) || 0) * .55 + (Number(s.stamina) || 0) * .45);
+    return 0;
+  }
+  function getAbilityRank(value) { return value >= 90 ? 'S' : value >= 80 ? 'A' : value >= 70 ? 'B' : value >= 60 ? 'C' : value >= 50 ? 'D' : value >= 40 ? 'E' : value >= 20 ? 'F' : 'G'; }
+  function migrateAbilities(state) {
+    for (const a of [...state.athletes, ...state.candidates, ...state.scouted, ...(state.career?.alumni || [])]) {
+      if (a.stats.acceleration === undefined || a.stats.speedEndurance === undefined) a.stats = Object.fromEntries(STAT_KEYS.map(key => [key, getStat(a, key)]));
+    }
+  }
   const EVENTS = [
     { id: '100m', name: '100m', unit: '秒', lowerBetter: true, description: '加速と最高速度。スピード・パワーが武器。', weights: { speed: .50, power: .25, agility: .15, technique: .05, mental: .05 } },
     { id: '400m', name: '400m', unit: '秒', lowerBetter: true, description: '速さを維持する持久力と、最後まで粘る精神力。', weights: { speed: .35, stamina: .35, power: .10, technique: .05, mental: .15 } },
@@ -22,23 +38,55 @@
     { id: '60mh', name: '60mハードル', indoor: true, unit: '秒', lowerBetter: true, description: '室内の5台ハードル。屋外ハードルの公認記録で参加資格を判定。', weights: { speed: .25, technique: .30, agility: .25, flexibility: .15, mental: .05 } }
   ];
   const INDIVIDUAL_EVENTS = EVENTS.filter(event => !event.teamSize && !event.indoor);
+  // Separate acceleration and speed endurance while retaining the established
+  // 0–100 performance curves and the same total weight in every event.
+  const EVENT_WEIGHTS = {
+    '100m': { acceleration: .20, speed: .35, speedEndurance: .05, power: .20, agility: .10, technique: .05, mental: .05 },
+    '400m': { acceleration: .05, speed: .25, speedEndurance: .35, stamina: .15, power: .05, technique: .05, mental: .10 },
+    '1500m': { speed: .10, speedEndurance: .15, stamina: .55, technique: .05, mental: .15 },
+    '110mh': { acceleration: .10, speed: .20, technique: .30, agility: .20, flexibility: .15, mental: .05 },
+    '100mh': { acceleration: .10, speed: .20, technique: .30, agility: .20, flexibility: .15, mental: .05 },
+    longjump: { acceleration: .10, speed: .15, power: .30, technique: .25, agility: .10, flexibility: .10 },
+    highjump: { power: .30, technique: .30, flexibility: .25, agility: .10, mental: .05 },
+    polevault: { technique: .40, power: .25, acceleration: .05, speed: .10, flexibility: .15, mental: .05 },
+    triplejump: { power: .30, technique: .30, agility: .20, speed: .10, acceleration: .05, flexibility: .05 },
+    relay: { acceleration: .15, speed: .30, technique: .20, power: .20, agility: .10, mental: .05 },
+    '60m': { acceleration: .30, speed: .25, power: .20, agility: .20, mental: .05 },
+    '60mh': { acceleration: .20, speed: .10, technique: .30, agility: .20, flexibility: .15, mental: .05 }
+  };
+  const LEGACY_EVENT_WEIGHTS = Object.fromEntries(EVENTS.map(e => [e.id, { ...e.weights }]));
+  for (const event of EVENTS) event.weights = EVENT_WEIGHTS[event.id];
+  for (const event of EVENTS) event.description = ({
+    '100m': '加速力と最高速度を軸に、瞬発力で地面を押す。',
+    '400m': '最高速度とスピード持久力をつなぎ、最後まで走り切る。',
+    '1500m': '有酸素持久力を軸に、スピード持久力でラストスパート。',
+    '110mh': '男子種目。加速力・種目技術・動作制御でリズムを刻む。',
+    '100mh': '女子種目。加速力・種目技術・動作制御でリズムを刻む。',
+    longjump: '助走の最高速度と踏み切りの瞬発力・種目技術をつなぐ。',
+    highjump: '瞬発力・種目技術・可動性でバーを越える。',
+    polevault: '種目技術を軸に、助走・瞬発力・可動性をまとめる。',
+    triplejump: '三歩をつなぐ瞬発力・種目技術・動作制御。',
+    relay: '男女別の4人編成。加速力・最高速度・種目技術を走順に生かす。',
+    '60m': '室内短距離。加速力と瞬発力でスタートを決める。',
+    '60mh': '室内の5台ハードル。加速力と種目技術で攻略する。'
+  })[event.id];
   const RELAY_LEGS = [
-    { speed: .35, power: .20, technique: .25, agility: .15, mental: .05 },
-    { speed: .65, power: .20, technique: .05, agility: .05, mental: .05 },
-    { speed: .35, power: .15, technique: .25, agility: .20, mental: .05 },
-    { speed: .50, power: .15, technique: .10, agility: .05, mental: .20 }
+    { acceleration: .20, speed: .20, power: .15, technique: .25, agility: .15, mental: .05 },
+    { acceleration: .10, speed: .50, speedEndurance: .10, power: .15, technique: .05, agility: .05, mental: .05 },
+    { acceleration: .10, speed: .25, power: .15, technique: .25, agility: .20, mental: .05 },
+    { acceleration: .10, speed: .35, speedEndurance: .10, power: .10, technique: .10, agility: .05, mental: .20 }
   ];
-  const FOCUSES = STAT_KEYS.map(id => ({ id, name: STAT_NAMES[id], description: STAT_NAMES[id] + 'を重点的に伸ばす。' })).concat({ id: 'balanced', name: 'バランス', description: '7つの能力を少しずつ伸ばす。' });
+  const FOCUSES = STAT_KEYS.map(id => ({ id, name: STAT_NAMES[id], description: STAT_NAMES[id] + 'を重点的に伸ばす。' })).concat({ id: 'balanced', name: 'バランス', description: '9つの能力を少しずつ伸ばす。' });
   const TRAININGS = [
-    { id: 'sprint', name: '短距離', description: 'スピード・パワー・敏捷性。', stats: { speed: .55, power: .25, agility: .20 }, fatigue: 12 },
-    { id: 'endurance', name: '持久走', description: '持久力・精神力。', stats: { stamina: .65, mental: .25, speed: .10 }, fatigue: 13 },
-    { id: 'power', name: '筋力', description: 'パワー・柔軟性。', stats: { power: .65, flexibility: .20, speed: .15 }, fatigue: 12 },
-    { id: 'technique', name: '技術', description: '技術・敏捷性。', stats: { technique: .60, agility: .25, mental: .15 }, fatigue: 10 },
-    { id: 'hurdles', name: 'ハードル', description: '技術・敏捷性・柔軟性。', stats: { technique: .35, agility: .30, flexibility: .25, speed: .10 }, fatigue: 12 },
-    { id: 'jump', name: '跳躍', description: 'パワー・技術・柔軟性。', stats: { power: .35, technique: .35, flexibility: .30 }, fatigue: 11 },
-    { id: 'relay', name: 'リレー', description: 'スピード・技術・精神力。', stats: { speed: .40, technique: .40, mental: .20 }, fatigue: 10 },
+    { id: 'sprint', name: '短距離', description: '加速力・最高速度・瞬発力。', stats: { acceleration: .35, speed: .40, power: .15, speedEndurance: .10 }, fatigue: 12 },
+    { id: 'endurance', name: '持久走', description: '有酸素持久力・スピード持久力。', stats: { stamina: .65, speedEndurance: .25, mental: .10 }, fatigue: 13 },
+    { id: 'power', name: '筋力', description: '瞬発力・加速力・動作制御。', stats: { power: .65, acceleration: .20, agility: .15 }, fatigue: 12 },
+    { id: 'technique', name: '技術', description: '種目技術・動作制御・集中力。', stats: { technique: .60, agility: .25, mental: .15 }, fatigue: 10 },
+    { id: 'hurdles', name: 'ハードル', description: '種目技術・動作制御・可動性。', stats: { technique: .35, agility: .30, flexibility: .25, speed: .10 }, fatigue: 12 },
+    { id: 'jump', name: '跳躍', description: '瞬発力・種目技術・可動性。', stats: { power: .35, technique: .35, flexibility: .30 }, fatigue: 11 },
+    { id: 'relay', name: 'リレー', description: '加速力・最高速度・種目技術。', stats: { acceleration: .15, speed: .25, technique: .40, mental: .20 }, fatigue: 10 },
     { id: 'balanced', name: '総合', description: '全能力を均等に育てる。', stats: Object.fromEntries(STAT_KEYS.map(key => [key, .15])), fatigue: 11 },
-    { id: 'rest', name: '休養', description: '今週は重点育成を休み、体力と意欲を回復。', stats: { mental: .10 }, fatigue: -34 }
+    { id: 'rest', name: '休養', description: '今週は重点育成を休み、コンディションと意欲を回復。', stats: { mental: .10 }, fatigue: -34 }
   ];
   const PRACTICE_CARDS = [
     { id: 'basic', name: '基礎を積み重ねる', description: '成長と疲労が標準。地道な反復練習。', growth: 1, fatigue: 1, cost: 0, stats: {} },
@@ -48,12 +96,56 @@
     { id: 'camp', name: '集中強化練習', description: '成長130%、疲労125%。部費8,000円。', growth: 1.30, fatigue: 1.25, cost: 8000, stats: { power: .20 } },
     { id: 'mobility', name: '動きづくり', description: '敏捷性・柔軟性 +0.35。疲労80%。', growth: .95, fatigue: .80, cost: 0, stats: { agility: .35, flexibility: .35 } }
   ];
+  // Previous v2 cards are accepted verbatim on import, but fresh cards no
+  // longer advertise costs or outdated attributes. They remain a compatibility
+  // entry point for tools that still use choosePracticeCard.
+  const LEGACY_PRACTICE_CARDS = PRACTICE_CARDS.map(c => ({ ...c, stats: { ...c.stats } }));
+  const practiceDescriptions = { basic: '最高速度・種目技術を育て、週末に回復する。', technical: '動作制御を整えてから、種目技術を重点的に磨く。', condition: '練習量を減らし、コンディションの回復を優先。', teamwork: '種目技術からスピード練習へつなぎ、週末に回復。', camp: '3ブロックとも強化練習。成長と引き換えに疲労が大きい。', mobility: '動作制御・可動性から種目技術へ。週末は回復する。' };
+  for (const card of PRACTICE_CARDS) { card.cost = 0; card.description = practiceDescriptions[card.id]; }
   const FACILITIES = [
     { id: 'track', name: 'トラック', description: '短距離・持久走・ハードル・リレーの練習効果が12%ずつ上昇。', baseCost: 65000 },
     { id: 'gym', name: 'トレーニング室', description: '筋力・技術・跳躍の練習効果が12%ずつ上昇。', baseCost: 55000 },
     { id: 'recovery', name: 'ケア設備', description: '毎週の疲労を軽減し、休養の回復量を増やす。', baseCost: 45000 },
-    { id: 'club', name: '部室', description: '週間収入と練習意欲、全員の成長を後押し。', baseCost: 75000 }
+    { id: 'club', name: '部室', description: '練習意欲と全員の成長を後押し。', baseCost: 75000 }
   ];
+  const WEEK_BLOCKS = [
+    { id: 'load', name: '強化練習', description: '大きな成長を狙う。負荷が高く、後半の回復と組み合わせたい。', kind: 'power', growth: 1.20, fatigue: 1.35, stats: { power: .18, acceleration: .12 } },
+    { id: 'speed', name: 'スピード練習', description: '加速から最高速度へ。速さを保つ力も磨く。', kind: 'sprint', growth: 1.05, fatigue: 1.15, stats: { acceleration: .25, speed: .20, speedEndurance: .15 } },
+    { id: 'aerobic', name: '持久力づくり', description: '一定のペースで走り込み、有酸素持久力を育てる。', kind: 'endurance', growth: 1, fatigue: 1.05, stats: { stamina: .35, speedEndurance: .15 } },
+    { id: 'skill', name: '種目別の技術', description: '一人ずつフォームを確認。強化の後に置くと技術定着。', kind: 'technique', growth: .95, fatigue: .85, stats: { technique: .30, agility: .15 } },
+    { id: 'mobility', name: '動きづくり', description: '動作制御と可動性。軽い負荷で体の使い方を磨く。', kind: 'mobility', growth: .85, fatigue: .65, stats: { agility: .25, flexibility: .30 } },
+    { id: 'recovery', name: '回復と振り返り', description: '負荷を下げて回復。最後に置くと翌週への余力が増す。', kind: 'rest', growth: .55, fatigue: .25, recovery: 12, stats: { flexibility: .20, mental: .10 } }
+  ];
+  const BLOCK_DAYS = [2, 3, 2];
+  const DEFAULT_WEEK_ROUTE = ['speed', 'skill', 'recovery'];
+  function validWeekRoute(route) { return Array.isArray(route) && route.length === 3 && route.every(id => WEEK_BLOCKS.some(b => b.id === id)); }
+  function weekEffects(route) {
+    const effect = { name: '週間プログラム', growth: 0, fatigue: 0, recovery: 0, stats: {}, notes: [] };
+    route.forEach((id, i) => { const b = WEEK_BLOCKS.find(b => b.id === id), weight = BLOCK_DAYS[i] / 7; effect.growth += b.growth * weight; effect.fatigue += b.fatigue * weight; effect.recovery += (b.recovery || 0) * weight; for (const [key, gain] of Object.entries(b.stats)) effect.stats[key] = (effect.stats[key] || 0) + gain * weight; });
+    if (route.some((id, i) => i && id === 'skill' && ['load', 'speed'].includes(route[i - 1]))) { effect.stats.technique = (effect.stats.technique || 0) + .18; effect.notes.push('強化→技術：種目技術の定着 +0.18'); }
+    if (route[2] === 'recovery') { effect.recovery += 4; effect.notes.push('週末の回復：翌週のコンディション +4'); }
+    if (route[0] === 'mobility' && ['load','speed'].includes(route[1])) { effect.fatigue *= .90; effect.notes.push('動きづくり→強化：週間疲労を10%軽減'); }
+    if (route.every(id => ['load','speed','aerobic'].includes(id))) { effect.fatigue *= 1.15; effect.notes.push('高負荷の連続：週間疲労が15%増加'); }
+    return effect;
+  }
+  function getWeekJourney(state) {
+    const route = validWeekRoute(state.weekRoute) ? [...state.weekRoute] : [...DEFAULT_WEEK_ROUTE], effect = weekEffects(route), healthy = state.athletes.filter(a => !a.injury), pool = healthy.length ? healthy : state.athletes;
+    const index = ((state.year - 1) * 48 + state.week - 1) % pool.length, target = [...pool].sort((a,b) => a.energy-b.energy)[index];
+    const next = getNextMeet(state), nearMeet = next.weeksUntil <= 2, tired = target.energy < 55;
+    const eventId = tired ? 'fatigue' : nearMeet ? 'competition' : ['breakthrough','rhythm','teamwork'][(state.week + state.year) % 3];
+    const content = { fatigue: ['少し、脚が重いです', '疲れが見え始めた' + target.name + '。残りの練習をどう進めよう。'], competition: ['大会まで、あと少し', target.name + 'が動きを確認している。大会を前に、何を大切にする？'], breakthrough: ['つかめそうな感覚', target.name + 'が今日の練習で手応えを感じている。ここからの指導は？'], rhythm: ['自分のリズムを探して', target.name + 'がフォームを確かめている。チームにかける言葉を選ぼう。'], teamwork: ['仲間同士、声をかけ合って', target.name + 'が仲間と声をかけ合っている。後半の練習をどうまとめる？'] }[eventId];
+    let day = 0; const labels = ['月','火','水','木','金','土','日'], days = route.flatMap((id, i) => Array.from({length: BLOCK_DAYS[i]}, () => ({day: ++day, label: labels[day-1], blockId: id})));
+    return { route, days, event: { id: eventId, title: content[0], text: content[1], athleteId: target.id, choices: [
+      { id: 'balanced', label: '丁寧に積み重ねる', description: '予定どおりの負荷。個別指導は重点能力 最大+0.35（高能力ほど減衰・休養中なし）。' },
+      { id: 'push', label: 'もう一段、挑戦しよう', description: '全体の成長係数×1.12、練習負荷×1.20。個別指導は最大+0.60（高能力ほど減衰・休養中なし）。' },
+      { id: 'care', label: '質を保って、量を減らそう', description: '成長係数×0.88、練習負荷×0.70、回復+5。個別指導は最大+0.25（高能力ほど減衰・休養中なし）。' }
+    ] }, forecast: { growth: round(effect.growth, 2), fatigue: round(effect.fatigue, 2), recovery: round(effect.recovery, 1), note: effect.notes.join(' / ') || '練習の配分で、成長と翌週の余力が変わります。' } };
+  }
+  function setWeekRoute(state, route) {
+    if (!validState(state) || !validWeekRoute(route)) return fail('週間プログラムは3つの練習で組み立ててください。');
+    if (state.pendingMeet) return fail('大会を終えてから、次の練習を組み立てましょう。');
+    state.weekRoute = [...route]; return { ok: true, message: '7日間の週間プログラムを更新しました。' };
+  }
   const CAREER_GOALS = [
     { id: 'personalBests', name: '一人ひとりの自己ベスト', description: '公認の個人種目で自己ベストを20回。初記録も数えます。', target: 20, reward: 50000 },
     { id: 'allRound', name: '種目の垣根を越えて', description: '男女・種目別の6区分で公認大会3位以内。', target: 6, reward: 60000 },
@@ -128,8 +220,8 @@
   }
   function getAge(state, athlete, meet) { const month = meet ? (Math.floor((meet.week - 1) / 4) + 3) % 12 + 1 : getCalendar(state).month; return START_YEAR + state.year - 1 + (month < 4 ? 1 : 0) - athlete.birthYear; }
   function getDefaultTraining(eventId) { return ({ '100m': 'sprint', '60m': 'sprint', '400m': 'balanced', '1500m': 'endurance', '110mh': 'hurdles', '100mh': 'hurdles', '60mh': 'hurdles', longjump: 'jump', highjump: 'jump', polevault: 'technique', triplejump: 'jump', relay: 'relay' })[eventId] || 'balanced'; }
-  function getAthleteRating(athlete, eventId) { const event = findEvent(eventId); return !event || !athlete?.stats ? 0 : round(Object.entries(event.weights).reduce((sum, [key, weight]) => sum + (Number(athlete.stats[key]) || 0) * weight, 0)); }
-  function getSuitability(athlete) { return INDIVIDUAL_EVENTS.filter(e => !e.gender || e.gender === athlete.gender).map(event => { const rating = getAthleteRating(athlete, event.id); return { eventId: event.id, name: event.name, rating, rank: rating >= 90 ? 'S' : rating >= 80 ? 'A' : rating >= 70 ? 'B' : rating >= 60 ? 'C' : rating >= 50 ? 'D' : rating >= 40 ? 'E' : 'F', description: event.description }; }).sort((a, b) => b.rating - a.rating); }
+  function getAthleteRating(athlete, eventId) { const event = findEvent(eventId); return !event || !athlete?.stats ? 0 : round(Object.entries(event.weights).reduce((sum, [key, weight]) => sum + getStat(athlete, key) * weight, 0)); }
+  function getSuitability(athlete) { return INDIVIDUAL_EVENTS.filter(e => !e.gender || e.gender === athlete.gender).map(event => { const rating = getAthleteRating(athlete, event.id); return { eventId: event.id, name: event.name, rating, rank: getAbilityRank(rating), description: event.description }; }).sort((a, b) => b.rating - a.rating); }
   function freshCareerStats() { return { personalBests: 0, podiumDivisions: [], relayPodiums: [], interhighEntries: 0, interhighWins: 0, indoorPodiums: 0, meetCount: 0, medals: { gold: 0, silver: 0, bronze: 0 } }; }
   function freshCareerSeason(year, goalId = 'personalBests', mode = 'normal') { return { year, goalId, mode, goalRewarded: false, goalAchievedWeek: null, stats: freshCareerStats() }; }
   function careerGoalProgress(season) {
@@ -161,7 +253,7 @@
     return true;
   }
   function careerSeasonSummary(season, partial = false) {
-    return { year: season.year, mode: season.mode, goalId: partial ? null : season.goalId, achieved: !partial && season.goalRewarded, reward: !partial && season.goalRewarded ? CAREER_GOALS.find(g => g.id === season.goalId).reward : 0, medals: { ...season.stats.medals }, personalBests: season.stats.personalBests, meetCount: season.stats.meetCount, interhighWins: season.stats.interhighWins, partial };
+    return { year: season.year, mode: season.mode, goalId: partial ? null : season.goalId, achieved: !partial && season.goalRewarded, reward: 0, medals: { ...season.stats.medals }, personalBests: season.stats.personalBests, meetCount: season.stats.meetCount, interhighWins: season.stats.interhighWins, partial };
   }
   function makeCareer(state) {
     const career = { version: 1, startedYear: state.year, season: freshCareerSeason(state.year), schoolRecords: [], alumni: [], seasons: [], lifetime: { completedSeasons: state.year - 1, goalsAchieved: 0, interhighTitles: 0, currentStreak: 0, bestStreak: 0, graduates: Math.min(MAX_COUNT, Math.max(0, state.year - 3) * 12), lastTitleYear: null }, migrated: state.year > 1 || state.week > 1 || state.history.length > 0 };
@@ -210,8 +302,8 @@
     if (!goal.achieved || career.season.goalRewarded) return { reward: 0, message: '' };
     career.season.goalRewarded = true; career.season.goalAchievedWeek = state.week;
     career.lifetime.goalsAchieved = safeAdd(career.lifetime.goalsAchieved, 1);
-    state.money = safeAdd(state.money, goal.reward);
-    return { reward: goal.reward, message: '年度目標「' + goal.name + '」達成！ 活動支援金 +' + goal.reward.toLocaleString('ja-JP') + '円。' };
+    // Goal completion grants an additional school facility request, not money.
+    return { reward: 0, message: '年度目標「' + goal.name + '」達成！ 今年の設備整備をもう1回申請できます。' };
   }
   function recordCareerMeet(state, meet, results, summary) {
     const career = ensureCareer(state), completed = { ...meet, year: state.year, mode: career.season.mode, results };
@@ -239,7 +331,7 @@
     // A legacy save may recover an achieved goal after its final meet. Settle it
     // before archiving, so the displayed achievement never disappears unpaid.
     const settlement = settleCareerGoal(state);
-    if (settlement.reward) { report.income += settlement.reward; report.balance += settlement.reward; report.events.push(settlement.message); }
+    if (settlement.message) report.events.push(settlement.message);
     career.seasons.unshift(careerSeasonSummary(career.season)); career.seasons.length = Math.min(career.seasons.length, 30);
     career.alumni.unshift(...graduates.map(a => ({ id: a.id, name: a.name, gender: a.gender, event: a.event, trait: a.trait, color: a.color, graduationYear: state.year, stats: { ...a.stats }, bestBySpec: copy(a.bestBySpec) })));
     career.alumni.length = Math.min(career.alumni.length, 60);
@@ -252,15 +344,17 @@
     const serial = state.nextAthleteId++, gender = options.gender || (serial % 2 ? 'boys' : 'girls'), grade = options.grade ?? 1;
     const pool = INDIVIDUAL_EVENTS.filter(e => !e.gender || e.gender === gender), eventId = options.event || pool[Math.floor(random(state) * pool.length)].id;
     const event = findEvent(eventId), trait = options.trait || TRAITS[Math.floor(random(state) * TRAITS.length)], base = options.base ?? 34 + random(state) * 8 + Math.min(state.reputation, 100) * .08;
-    const stats = Object.fromEntries(STAT_KEYS.map(key => [key, round(clamp(base + (event.weights[key] || 0) * 62 + random(state) * 7, 20, 88))]));
+    const legacyWeights = LEGACY_EVENT_WEIGHTS[eventId];
+    const stats = Object.fromEntries(LEGACY_STAT_KEYS.map(key => [key, round(clamp(base + (legacyWeights[key] || 0) * 62 + random(state) * 7, 20, 88))]));
+    stats.acceleration = getStat({ stats }, 'acceleration'); stats.speedEndurance = getStat({ stats }, 'speedEndurance');
     const birthMonth = options.birthMonth || 1 + Math.floor(random(state) * 12);
     const athlete = { id: 'athlete-' + serial, name: options.name || LAST_NAMES[Math.floor(random(state) * LAST_NAMES.length)] + ' ' + FIRST_NAMES[gender][Math.floor(random(state) * FIRST_NAMES[gender].length)], gender, grade, birthMonth, birthYear: START_YEAR + state.year - 1 - 15 - grade + (birthMonth <= 3 ? 1 : 0), trait: trait.name, traitDescription: trait.description, event: eventId, specialty: eventId, stats: options.stats || stats, energy: 100, morale: 80, injury: 0, training: getDefaultTraining(eventId), focus: Object.entries(event.weights).sort((a,b) => b[1] - a[1])[0][0], best: {}, bestBySpec: {}, officialBest: {}, officialRecords: {}, color: COLORS[(serial - 1) % COLORS.length], potential: round(.90 + random(state) * .28, 2), form: 1 };
     return athlete;
   }
   function generateCandidates(state) {
-    return ['boys', 'girls'].flatMap(gender => [0, 1, 2].map(index => {
-      const athlete = makeAthlete(state, { gender, grade: 0, base: 40 + index * 4 + Math.min(state.reputation, 100) * .10 });
-      athlete.cost = 24000 + index * 14000; athlete.note = ['中学の地区大会で活躍。伸びしろに期待。', '中学県大会の経験者。得意種目を伸ばしたい。', '中学地方大会の注目株。新しい部で全国へ。'][index]; return athlete;
+    return ['boys', 'girls'].flatMap(gender => [0, 1, 2, 3, 4, 5].map(index => {
+      const athlete = makeAthlete(state, { gender, grade: 0, base: 40 + (index % 3) * 4 + Math.min(state.reputation, 100) * .10 });
+      athlete.cost = 0; athlete.note = ['中学の地区大会で活躍。伸びしろに期待。', '中学県大会の経験者。得意種目を伸ばしたい。', '中学地方大会の注目株。新しい部で全国へ。', '部活動の体験参加で光った才能。', '伸ばしたい能力が明確な努力家。', '仲間と全国を目指したい注目株。'][index]; return athlete;
     }));
   }
   function refreshCards(state) {
@@ -270,7 +364,7 @@
   }
   function freshQualification() { return Object.fromEntries(MEETS.map(meet => [meet.id, ['district', 'rookieDistrict'].includes(meet.id) ? true : {}])); }
   function createGame(seed) {
-    const state = { version: VERSION, year: 1, week: 1, money: 180000, reputation: 0, spirit: 70, intensity: 'normal', athletes: [], facilities: { track: 1, gym: 1, recovery: 1, club: 1 }, logs: [], history: [], medals: { gold: 0, silver: 0, bronze: 0 }, teamBest: { boys: {}, girls: {} }, schoolName: '青葉高校', rng: seedValue(seed), nextAthleteId: 1, recruitedIds: [], candidates: [], scouted: [], qualification: freshQualification(), completedMeets: [], pendingMeet: null, pendingMeets: [], lastMeet: null, competedThisWeek: [], monthPlanPending: true, practiceCards: [], selectedPracticeCard: 'basic', goal: { districtQualified: false, prefectureQualified: false, nationalsQualified: false, nationalsWon: false, wonYear: null }, totalWeeks: 0 };
+    const state = { version: VERSION, year: 1, week: 1, money: 0, weekRoute: [...DEFAULT_WEEK_ROUTE], facilityPlan: { year: 1, used: 0 }, reputation: 0, spirit: 70, intensity: 'normal', athletes: [], facilities: { track: 1, gym: 1, recovery: 1, club: 1 }, logs: [], history: [], medals: { gold: 0, silver: 0, bronze: 0 }, teamBest: { boys: {}, girls: {} }, schoolName: '青葉高校', rng: seedValue(seed), nextAthleteId: 1, recruitedIds: [], candidates: [], scouted: [], qualification: freshQualification(), completedMeets: [], pendingMeet: null, pendingMeets: [], lastMeet: null, competedThisWeek: [], monthPlanPending: true, practiceCards: [], selectedPracticeCard: 'basic', goal: { districtQualified: false, prefectureQualified: false, nationalsQualified: false, nationalsWon: false, wonYear: null }, totalWeeks: 0 };
     const names = { boys: ['橘 翔太', '宮本 陸', '田辺 悠', '北村 蓮', '藤原 湊', '遠藤 大和'], girls: ['水野 葵', '桜井 凛', '小川 美咲', '高橋 結衣', '森 陽菜', '石川 紬'] };
     for (const gender of ['boys', 'girls']) ['100m', '400m', '1500m', gender === 'boys' ? '110mh' : '100mh', 'longjump', 'highjump'].forEach((event, i) => state.athletes.push(makeAthlete(state, { gender, event, name: names[gender][i], base: 37 + (i % 3) * 2, birthMonth: [5, 8, 1, 10, 3, 7][i] })));
     state.candidates = generateCandidates(state); refreshCards(state);
@@ -367,7 +461,7 @@
   }
   function predictResult(athlete, eventId, division) { const height = division?.hurdleHeight ?? (eventId === '110mh' ? 1.067 : eventId === '100mh' ? .838 : eventId === '60mh' ? athlete.gender === 'boys' ? .991 : .838 : undefined); return ratingToResult(getAthleteRating(athlete, eventId) * readiness(athlete), eventId, athlete.gender, height); }
   function relayAthletes(state, ids) { if (!Array.isArray(ids) || ids.length !== 4 || new Set(ids).size !== 4) return null; const athletes = ids.map(id => state.athletes.find(a => a.id === id)); return athletes.some(a => !a || a.injury > 0) || new Set(athletes.map(a => a.gender)).size !== 1 ? null : athletes; }
-  function relayRating(athletes, useReadiness) { return !Array.isArray(athletes) || athletes.length !== 4 || athletes.some(a => !a?.stats) ? null : athletes.reduce((sum, a, i) => sum + Object.entries(RELAY_LEGS[i]).reduce((n,[key,w]) => n + a.stats[key] * w, 0) * (useReadiness ? readiness(a) : 1), 0) / 4; }
+  function relayRating(athletes, useReadiness) { return !Array.isArray(athletes) || athletes.length !== 4 || athletes.some(a => !a?.stats) ? null : athletes.reduce((sum, a, i) => sum + Object.entries(RELAY_LEGS[i]).reduce((n,[key,w]) => n + getStat(a, key) * w, 0) * (useReadiness ? readiness(a) : 1), 0) / 4; }
   function getRelayRating(athletes) { const rating = relayRating(athletes, false); return rating == null ? null : round(rating); }
   function predictRelayResult(state, ids) { const athletes = relayAthletes(state, ids); return athletes ? ratingToResult(relayRating(athletes, true), 'relay', athletes[0].gender) : null; }
   function formatResult(value, eventId) { if (!Number.isFinite(value)) return '—'; if (findEvent(eventId)?.unit === 'm') return value.toFixed(2) + 'm'; if (eventId === '1500m') { const tenth = Math.round(value * 10); return Math.floor(tenth / 600) + ':' + ((tenth % 600) / 10).toFixed(1).padStart(4, '0'); } return value.toFixed(2) + '秒'; }
@@ -375,23 +469,36 @@
   function confirmMonthlyPlan(state) { if (!validState(state)) return fail('部のデータを読み込めません。'); state.monthPlanPending = false; const message = getCalendar(state).monthName + 'の育成方針を決定しました。'; addLog(state, message); return { ok: true, message }; }
   function setTraining(state, athleteId, trainingId) { const athlete = validState(state) && state.athletes.find(a => a.id === athleteId); if (!athlete || !TRAININGS.some(t => t.id === trainingId)) return fail('選手または練習メニューが見つかりません。'); athlete.training = trainingId; return { ok: true, message: athlete.name + 'の練習を変更しました。' }; }
   function setIntensity(state, intensity) { if (!validState(state) || !['easy','normal','hard'].includes(intensity)) return fail('練習強度が正しくありません。'); state.intensity = intensity; return { ok: true, message: '練習強度を変更しました。' }; }
-  function choosePracticeCard(state, cardId) { if (!validState(state)) return fail('部のデータを読み込めません。'); const card = state.practiceCards.find(c => c.id === cardId); if (!card) return fail('今週はこの練習カードを選べません。'); if (state.money < card.cost) return fail('部費が足りません。'); state.selectedPracticeCard = cardId; return { ok: true, message: '今週は「' + card.name + '」。' }; }
-  function getFacilityCost(state, facilityId) { const f = FACILITIES.find(f => f.id === facilityId); if (!f || !state.facilities) return null; const level = state.facilities[facilityId]; return level >= 5 ? null : Math.round(f.baseCost * 1.6 ** (level - 1) / 1000) * 1000; }
-  function upgradeFacility(state, facilityId) { if (!validState(state)) return fail('部のデータを読み込めません。'); const f = FACILITIES.find(f => f.id === facilityId); if (!f) return fail('設備が見つかりません。'); const cost = getFacilityCost(state, facilityId); if (cost == null) return fail('この設備は最高レベルです。'); if (state.money < cost) return fail('部費が足りません。'); state.money -= cost; state.facilities[facilityId]++; const message = f.name + 'がLv.' + state.facilities[facilityId] + 'になりました。'; addLog(state,message); return { ok:true,message,cost }; }
+  function choosePracticeCard(state, cardId) {
+    if (!validState(state)) return fail('部のデータを読み込めません。');
+    const card = state.practiceCards.find(c => c.id === cardId); if (!card) return fail('今週はこの練習カードを選べません。');
+    const routes = { basic: ['speed','skill','recovery'], technical: ['mobility','skill','skill'], condition: ['recovery','recovery','recovery'], teamwork: ['skill','speed','recovery'], camp: ['load','load','load'], mobility: ['mobility','skill','recovery'] };
+    state.selectedPracticeCard = cardId; state.weekRoute = routes[cardId].slice(); return { ok: true, message: '「' + card.name + '」を週間プログラムに反映しました。' };
+  }
+  function getFacilityPlan(state) {
+    const used = state.facilityPlan?.year === state.year ? state.facilityPlan.used : 0, total = 2 + (state.career?.season.goalRewarded ? 1 : 0);
+    return { available: Math.max(0, total-used), used, total };
+  }
+  function getFacilityCost(state, facilityId) { const f = FACILITIES.find(f => f.id === facilityId); return !f || !state.facilities || state.facilities[facilityId] >= 5 ? null : 0; }
+  function upgradeFacility(state, facilityId) {
+    if (!validState(state)) return fail('部のデータを読み込めません。'); const f = FACILITIES.find(f => f.id === facilityId); if (!f) return fail('設備が見つかりません。');
+    if (getFacilityCost(state, facilityId) === null) return fail('この設備は最高レベルです。');
+    const plan = getFacilityPlan(state); if (!plan.available) return fail('今年の整備申請は完了しています。年度目標の達成、または新年度を待ちましょう。');
+    state.facilityPlan = { year: state.year, used: plan.used + 1 }; state.facilities[facilityId]++; const message = f.name + 'がLv.' + state.facilities[facilityId] + 'になりました。'; addLog(state,message); return { ok:true,message,cost:0 };
+  }
   function getCandidates(state) { return getCalendar(state).month === 10 ? state.candidates.filter(a => !state.recruitedIds.includes(a.id)) : []; }
   function scoutAthlete(state, candidateId) {
     if (!validState(state)) return fail('部のデータを読み込めません。');
     if (getCalendar(state).month !== 10) return fail('中学生のスカウトは10月に行えます。');
     const candidate = getCandidates(state).find(a => a.id === candidateId); if (!candidate) return fail('この選手はスカウトできません。');
     if (state.scouted.filter(a => a.gender === candidate.gender).length >= 3) return fail('スカウト内定は男女それぞれ3人までです。');
-    if (state.money < candidate.cost) return fail('スカウトの部費が足りません。');
-    state.money -= candidate.cost; state.recruitedIds.push(candidate.id); const athlete = JSON.parse(JSON.stringify(candidate)); state.scouted.push(athlete);
+    state.recruitedIds.push(candidate.id); const athlete = JSON.parse(JSON.stringify(candidate)); state.scouted.push(athlete);
     const message = athlete.name + 'が入部内定！ 翌年4月に1年生として合流します。'; addLog(state,message); return { ok:true,message,athlete };
   }
   const recruitAthlete = scoutAthlete;
   function trainAthlete(state, athlete, card) {
     const before = athlete.energy, training = TRAININGS.find(t => t.id === athlete.training);
-    const change = { athleteId: athlete.id, name: athlete.name, training: training.name, trainingId: training.id, focus: athlete.focus, statGains: {}, energyChange: 0, injury: 0, message: '' };
+    const change = { athleteId: athlete.id, name: athlete.name, training: training.name, trainingId: training.id, focus: athlete.focus, before: { ...athlete.stats }, after: {}, beforeEnergy: before, afterEnergy: before, statGains: {}, energyChange: 0, injury: 0, message: '' };
     if (athlete.injury > 0) { athlete.injury--; athlete.energy = clamp(athlete.energy + 25 + state.facilities.recovery * 3, 0, 100); change.message = athlete.injury ? 'リハビリ中（あと' + athlete.injury + '週）' : 'ケガから復帰！'; }
     else if (training.id === 'rest') { athlete.energy = clamp(athlete.energy + 32 + state.facilities.recovery * 4, 0, 100); athlete.morale = clamp(athlete.morale + 5, 0, 100); change.message = '休養して体力を回復。'; }
     else {
@@ -407,7 +514,7 @@
       athlete.energy = round(clamp(athlete.energy - Math.max(0, fatigue) + (card.recovery || 0), 0, 100)); athlete.morale = round(clamp(athlete.morale + (state.intensity === 'hard' ? -1 : 1) + state.facilities.club * .15, 0, 100));
       if (random(state) < (athlete.energy < 30 ? (30 - athlete.energy) * .005 : 0)) { athlete.injury = 1 + Math.floor(random(state) * 2); change.injury = athlete.injury; change.message = '疲労によるケガ。' + athlete.injury + '週間の療養。'; }
     }
-    change.energyChange = round(athlete.energy - before); return change;
+    change.energyChange = round(athlete.energy - before); change.afterEnergy = athlete.energy; change.after = { ...athlete.stats }; return change;
   }
   function rollYear(state, report) {
     finishCareerYear(state, report);
@@ -419,22 +526,45 @@
       for (let i = 0; i < 6; i++) { const athlete = committed[i] ? JSON.parse(JSON.stringify(committed[i])) : makeAthlete(state,{gender}); athlete.grade = 1; athlete.energy = 100; athlete.morale = 85; athlete.injury = 0; delete athlete.cost; delete athlete.note; state.athletes.push(athlete); report.newcomers.push(athlete); }
     }
     state.scouted = []; state.recruitedIds = []; state.candidates = generateCandidates(state);
-    const grant = 110000 + state.reputation * 200; state.money = safeAdd(state.money, grant); report.income += grant; report.balance += grant; state.spirit = clamp(state.spirit + 8, 0, 100);
+    state.facilityPlan = { year: state.year, used: 0 }; state.spirit = clamp(state.spirit + 8, 0, 100);
     if (report.graduated.length) report.events.push(report.graduated.length + '人が卒業。先輩の記録と思いを受け継ごう。');
-    report.events.push('新年度！ 男子6名・女子6名の新入生が合流。活動補助金' + grant.toLocaleString('ja-JP') + '円。');
+    report.events.push('新年度！ 男子6名・女子6名の新入生が合流。学校への設備整備申請が2回できます。');
   }
-  function advanceWeek(state) {
+  function advanceWeek(state, options = {}) {
     if (!validState(state)) return fail('部のデータを読み込めません。');
     if (state.pendingMeet) return fail('大会当日です。出場または見送りで大会を終えてください。');
     if (state.monthPlanPending) return fail('月初です。全員の月間育成方針を確認・決定してください。');
-    if (state.totalWeeks >= MAX_COUNT || (state.week === 48 && (state.year >= MAX_YEAR || state.nextAthleteId > MAX_COUNT - 18))) return fail('数値を正確に保存できる上限に達しました。セーブを書き出してください。');
-    const card = state.practiceCards.find(c => c.id === state.selectedPracticeCard); if (!card || state.money < card.cost) return fail('選んだ練習カードの部費が足りません。');
-    ensureCareer(state);
-    const beforeMonth = getCalendar(state).month, report = { title: '今週の練習報告', weekLabel: getCalendar(state).label, cardName: card.name, changes: [], income: 0, expenses: card.cost, balance: 0, events: [], graduated: [], newcomers: [], lines: [], monthChanged: false };
+    if (state.totalWeeks >= MAX_COUNT || (state.week === 48 && (state.year >= MAX_YEAR || state.nextAthleteId > MAX_COUNT - 24))) return fail('数値を正確に保存できる上限に達しました。セーブを書き出してください。');
+    if (!options || typeof options !== 'object' || Array.isArray(options)) return fail('指導方針が正しくありません。');
+    if (state.weekRoute !== undefined && !validWeekRoute(state.weekRoute)) return fail('週間プログラムを確認してください。');
+    const journey = getWeekJourney(state), decision = options.decision === undefined ? 'balanced' : options.decision, choice = journey.event.choices.find(c => c.id === decision);
+    if (!choice) return fail('今週の相談にある指導方針を選んでください。');
+    const explicitTarget = options.athleteId !== undefined;
+    const coached = state.athletes.find(a => a.id === (explicitTarget ? options.athleteId : journey.event.athleteId) && !a.injury);
+    if (explicitTarget && !coached) return fail('個別指導は在籍中でケガのない選手を選んでください。');
+    // All validation precedes the first mutation. The date and every athlete
+    // are settled exactly once, after the player's coaching choice.
+    ensureCareer(state); migrateAbilities(state);
+    const card = weekEffects(journey.route);
+    if (decision === 'push') { card.growth *= 1.12; card.fatigue *= 1.20; }
+    if (decision === 'care') { card.growth *= .88; card.fatigue *= .70; card.recovery += 5; }
+    const beforeMonth = getCalendar(state).month, report = { title: '7日間の活動ハイライト', weekLabel: getCalendar(state).label, cardName: journey.route.map(id => WEEK_BLOCKS.find(b => b.id === id).name).join(' → '), route: [...journey.route], decision, decisionText: (coached ? coached.name + 'へ：' : 'チームへ：') + choice.label, coachedAthleteId: coached?.id || null, changes: [], income: 0, expenses: 0, balance: 0, events: [], graduated: [], newcomers: [], lines: [], rankUps: [], highlights: [], monthChanged: false };
     report.changes = state.athletes.map(a => trainAthlete(state,a,card));
-    report.income = Math.round(12500 + state.reputation * 55 + state.facilities.club * 2000); report.expenses += 2400 + state.athletes.length * 290 + Object.values(state.facilities).reduce((s,l) => s + l, 0) * 450;
-    report.balance = report.income - report.expenses; state.money = Math.max(0,safeAdd(state.money, report.balance)); state.totalWeeks++; state.spirit = round(clamp(state.spirit + (card.spirit || 0) + (state.intensity === 'hard' ? -.5 : .5), 15, 100));
-    if (random(state) < .13) { const type = Math.floor(random(state) * 3); if (type === 0) { state.money = safeAdd(state.money, 12000); report.income += 12000; report.balance += 12000; report.events.push('地域の応援で活動支援！ 部費 +12,000円。'); } else if (type === 1) { state.spirit = clamp(state.spirit + 6, 0, 100); report.events.push('仲間同士で励まし合う。チームの士気 +6。'); } else { state.athletes.forEach(a => { a.energy = clamp(a.energy + 7, 0, 100); }); report.events.push('保護者からお弁当の差し入れ。全員の体力 +7。'); } }
+    if (coached) report.changes.find(c => c.athleteId === coached.id).coached = true;
+    if (coached && !coached.injury && coached.training !== 'rest') {
+      const key = coached.focus === 'balanced' ? Object.keys(findEvent(coached.event).weights).sort((a,b) => getStat(coached,a)-getStat(coached,b))[0] : coached.focus, old = coached.stats[key], extra = {balanced:.35,push:.60,care:.25}[decision] * (old >= 95 ? .18 : old >= 85 ? .45 : old >= 75 ? .72 : 1);
+      coached.stats[key] = round(clamp(old + extra, 0, 100)); const change = report.changes.find(c => c.athleteId === coached.id); change.statGains[key] = round((change.statGains[key] || 0) + coached.stats[key] - old); change.after[key] = coached.stats[key]; change.coached = true;
+    }
+    state.totalWeeks++; state.spirit = round(clamp(state.spirit + (decision === 'care' ? 1 : 0) + (state.intensity === 'hard' ? -.5 : .5), 15, 100));
+    if (random(state) < .13) { const type = Math.floor(random(state) * 3); if (type < 2) { state.spirit = clamp(state.spirit + 6, 0, 100); report.events.push(type === 0 ? '地域の人たちが練習を応援。チームの士気 +6。' : '仲間同士で励まし合う。チームの士気 +6。'); } else { state.athletes.forEach(a => { a.energy = clamp(a.energy + 7, 0, 100); }); report.events.push('保護者からお弁当の差し入れ。全員のコンディション +7。'); } }
+    for (const change of report.changes) {
+      const a = state.athletes.find(a => a.id === change.athleteId); change.afterEnergy = a.energy; change.energyChange = round(a.energy-change.beforeEnergy);
+      for (const key of STAT_KEYS) if (getAbilityRank(change.after[key]) !== getAbilityRank(change.before[key])) report.rankUps.push({ athleteId: a.id, name: a.name, key, before: change.before[key], after: change.after[key], from: getAbilityRank(change.before[key]), to: getAbilityRank(change.after[key]) });
+      const key = STAT_KEYS.reduce((best,k) => (change.statGains[k] || 0) > (change.statGains[best] || 0) ? k : best, STAT_KEYS[0]);
+      report.highlights.push({ athleteId: a.id, name: a.name, key, label: STAT_NAMES[key], before: change.before[key], after: change.after[key], gain: change.statGains[key] || 0, rankBefore: getAbilityRank(change.before[key]), rankAfter: getAbilityRank(change.after[key]), energyChange: change.energyChange, coached: !!change.coached });
+    }
+    report.highlights.sort((a,b) => Number(b.coached)-Number(a.coached) || b.gain-a.gain); report.highlights.length = Math.min(3, report.highlights.length);
+    report.before = report.changes.map(c => ({ athleteId:c.athleteId, stats:c.before, energy:c.beforeEnergy })); report.after = report.changes.map(c => ({ athleteId:c.athleteId, stats:c.after, energy:c.afterEnergy }));
     if (state.week === 48) rollYear(state,report); else state.week++;
     state.competedThisWeek = []; refreshCards(state); report.monthChanged = beforeMonth !== getCalendar(state).month; state.monthPlanPending = report.monthChanged;
     if (report.monthChanged) report.events.push(getCalendar(state).monthName + 'の育成方針を決めよう。');
@@ -510,13 +640,13 @@
       const qualificationPlaces=official?field.qualifyPlaces:0,qualificationMark=qualificationPlaces?participants[qualificationPlaces-1].value:null;
       const qualified = official && rank <= qualificationPlaces && !!meet.next, medal = official && rank <= 3 ? ['gold','silver','bronze'][rank-1] : null;
       if (medal) {state.medals[medal] = safeAdd(state.medals[medal], 1);summary[medal]++;} if (qualified) { state.qualification[meet.next][key] = division.teamSize ? true : [athlete.id]; summary.qualified = true; }
-      const prize = Math.round((rank === 1 ? meet.prize : rank === 2 ? meet.prize*.65 : rank===3 ? meet.prize*.4 : 2500) * (official ? 1 : .25)); summary.prize += prize; summary.reputation += official ? (rank === 1 ? 4 : rank <=3 ? 2 : 1) * meet.level : 0;
+      const prize = 0; summary.reputation += official ? (rank === 1 ? 4 : rank <=3 ? 2 : 1) * meet.level : 0;
       for (const member of athletes) {member.energy = round(clamp(member.energy - (tactic==='aggressive'?19:tactic==='steady'?10:14),0,100)); member.morale=clamp(member.morale+(rank<=3?6:rank<=5?1:-2),0,100); if (meet.kind !== 'school' && !state.competedThisWeek.includes(member.id)) state.competedThisWeek.push(member.id);}
       results.push({eventId,divisionKey:key,eventName:division.name,name,athleteId:athlete.id,athleteName:name,gender:division.gender,category:division.category,indoor:meet.kind==='indoor',...(division.hurdleHeight?{hurdleHeight:division.hurdleHeight}:{}),value,formatted:formatResult(value,eventId),rank,participants,fieldSize:participants.length,schoolCount:new Set(participants.map(p=>p.school)).size,qualificationPlaces,qualificationMark,qualified,newBest,personalBest,medal,prize,tactic,official,...(members?{members,athleteIds:[...entry]}:{})});
     }
     if (meet.id==='district'&&summary.qualified) state.goal.districtQualified=true; if (meet.id==='prefecture'&&summary.qualified) state.goal.prefectureQualified=true; if (meet.id==='regional'&&summary.qualified) state.goal.nationalsQualified=true;
     if (meet.id==='nationals'&&summary.gold>0) {state.goal.nationalsWon=true;if(state.goal.wonYear==null)state.goal.wonYear=state.year;}
-    state.money=safeAdd(state.money,summary.prize); state.reputation=clamp(state.reputation+summary.reputation,0,999);state.spirit=clamp(state.spirit+(summary.qualified||summary.gold?6:-1),15,100);
+    summary.prize=0; state.reputation=clamp(state.reputation+summary.reputation,0,999);state.spirit=clamp(state.spirit+(summary.qualified||summary.gold?6:-1),15,100);
     summary.message = meet.id==='nationals'&&summary.gold ? 'インターハイ優勝！ 新しい部の歴史に、全国の金メダルを刻んだ。' : summary.qualified ? '通過した選手・リレーが'+MEETS.find(m=>m.id===meet.next).name+'へ！' : !summary.official ? 'オープン記録会で経験を積んだ。記録は参考記録となり、参加標準には使えません。' : summary.gold ? '金メダル獲得！ 次の舞台へつながる大きな一歩。' : '大会を終えました。記録と適性を振り返り、次の目標へ。';
     return finishMeet(state,meet,results,summary);
   }
@@ -529,11 +659,14 @@
       const sameValue=(a,b)=>a===b||(a!==null&&b!==null&&typeof a==='object'&&typeof b==='object'&&Array.isArray(a)===Array.isArray(b)&&(!Array.isArray(a)||a.length===b.length)&&Object.keys(a).length===Object.keys(b).length&&Object.keys(a).every(key=>Object.prototype.hasOwnProperty.call(b,key)&&sameValue(a[key],b[key])));
       if(!obj(d)||d.version!==VERSION||!n(d.year,1,MAX_YEAR,true)||!n(d.week,1,48,true)||!n(d.money,0,MAX_COUNT)||!n(d.reputation,0,999)||!n(d.spirit,0,100)||!n(d.rng,1,4294967295,true)||!n(d.nextAthleteId,1,MAX_COUNT,true)||!n(d.totalWeeks,0,MAX_COUNT,true)||!str(d.schoolName,30)||!['easy','normal','hard'].includes(d.intensity))return false;
       if(!obj(d.facilities)||Object.keys(d.facilities).length!==4||!FACILITIES.every(f=>n(d.facilities[f.id],1,5,true)))return false;
+      if(d.weekRoute!==undefined&&!validWeekRoute(d.weekRoute))return false;
+      if(d.facilityPlan!==undefined&&(!obj(d.facilityPlan)||!n(d.facilityPlan.year,1,d.year,true)||!n(d.facilityPlan.used,0,3,true)))return false;
       const validId=id=>typeof id==='string'&&/^athlete-[1-9][0-9]*$/.test(id)&&n(Number(id.slice(8)),1,MAX_COUNT,true),record=(v,id)=>!!findEvent(id)&&n(v,.01,findEvent(id).unit==='m'?30:1500),spec=key=>{const parts=key.split(':');return !!findEvent(parts[0])&&(parts.length===1?!['110mh','100mh','60mh'].includes(parts[0]):parts.length===2&&['110mh','100mh','60mh'].includes(parts[0])&&['0.762','0.838','0.991','1.067'].includes(parts[1]));};
       const athleteSpec=(key,a)=>{if(!spec(key))return false;const [id,height]=key.split(':'),e=findEvent(id);if(e.teamSize||(e.gender&&e.gender!==a.gender))return false;if(!height)return true;return (a.gender==='boys'?['0.991','1.067']:['0.762','0.838']).includes(height);};
-      const athlete=(a,junior=false)=>obj(a)&&validId(a.id)&&str(a.name,40)&&['boys','girls'].includes(a.gender)&&n(a.grade,junior?0:1,junior?0:3,true)&&n(a.birthMonth,1,12,true)&&n(a.birthYear,START_YEAR+d.year-22,START_YEAR+d.year-12,true)&&a.birthYear===START_YEAR+d.year-1-15-a.grade+(a.birthMonth<=3?1:0)&&INDIVIDUAL_EVENTS.some(e=>e.id===a.event&&(!e.gender||e.gender===a.gender))&&a.specialty===a.event&&str(a.trait,40)&&TRAITS.some(t=>t.name===a.trait)&&str(a.traitDescription,300)&&/^#[0-9a-fA-F]{6}$/.test(a.color)&&n(a.potential,.5,2)&&n(a.energy,0,100)&&n(a.morale,0,100)&&n(a.injury,0,3,true)&&TRAININGS.some(t=>t.id===a.training)&&FOCUSES.some(f=>f.id===a.focus)&&obj(a.stats)&&Object.keys(a.stats).length===7&&STAT_KEYS.every(k=>n(a.stats[k],0,100))&&obj(a.best)&&Object.entries(a.best).every(([id,v])=>record(v,id)&&!findEvent(id).teamSize&&(!findEvent(id).gender||findEvent(id).gender===a.gender))&&obj(a.bestBySpec)&&Object.entries(a.bestBySpec).every(([key,v])=>athleteSpec(key,a)&&record(v,key.split(':')[0]))&&obj(a.officialBest)&&Object.entries(a.officialBest).every(([key,v])=>athleteSpec(key,a)&&obj(v)&&record(v.value,key.split(':')[0])&&n(v.calendarYear,START_YEAR,getCalendar(d).calendarYear,true))&&(a.officialRecords===undefined||(obj(a.officialRecords)&&Object.entries(a.officialRecords).every(([key,years])=>athleteSpec(key,a)&&obj(years)&&Object.entries(years).every(([year,value])=>n(Number(year),START_YEAR,getCalendar(d).calendarYear,true)&&record(value,key.split(':')[0])))));
+      const validAbilities=s=>obj(s)&&[LEGACY_STAT_KEYS,STAT_KEYS].some(keys=>Object.keys(s).length===keys.length&&keys.every(k=>n(s[k],0,100)));
+      const athlete=(a,junior=false)=>obj(a)&&validId(a.id)&&str(a.name,40)&&['boys','girls'].includes(a.gender)&&n(a.grade,junior?0:1,junior?0:3,true)&&n(a.birthMonth,1,12,true)&&n(a.birthYear,START_YEAR+d.year-22,START_YEAR+d.year-12,true)&&a.birthYear===START_YEAR+d.year-1-15-a.grade+(a.birthMonth<=3?1:0)&&INDIVIDUAL_EVENTS.some(e=>e.id===a.event&&(!e.gender||e.gender===a.gender))&&a.specialty===a.event&&str(a.trait,40)&&TRAITS.some(t=>t.name===a.trait)&&str(a.traitDescription,300)&&/^#[0-9a-fA-F]{6}$/.test(a.color)&&n(a.potential,.5,2)&&n(a.energy,0,100)&&n(a.morale,0,100)&&n(a.injury,0,3,true)&&TRAININGS.some(t=>t.id===a.training)&&FOCUSES.some(f=>f.id===a.focus)&&validAbilities(a.stats)&&obj(a.best)&&Object.entries(a.best).every(([id,v])=>record(v,id)&&!findEvent(id).teamSize&&(!findEvent(id).gender||findEvent(id).gender===a.gender))&&obj(a.bestBySpec)&&Object.entries(a.bestBySpec).every(([key,v])=>athleteSpec(key,a)&&record(v,key.split(':')[0]))&&obj(a.officialBest)&&Object.entries(a.officialBest).every(([key,v])=>athleteSpec(key,a)&&obj(v)&&record(v.value,key.split(':')[0])&&n(v.calendarYear,START_YEAR,getCalendar(d).calendarYear,true))&&(a.officialRecords===undefined||(obj(a.officialRecords)&&Object.entries(a.officialRecords).every(([key,years])=>athleteSpec(key,a)&&obj(years)&&Object.entries(years).every(([year,value])=>n(Number(year),START_YEAR,getCalendar(d).calendarYear,true)&&record(value,key.split(':')[0])))));
       if(!Array.isArray(d.athletes)||d.athletes.length<12||d.athletes.length>36||!d.athletes.every(a=>athlete(a))||new Set(d.athletes.map(a=>a.id)).size!==d.athletes.length)return false;
-      if(!Array.isArray(d.candidates)||d.candidates.length!==6||!d.candidates.every(a=>athlete(a,true)&&n(a.cost,0,1e6)&&str(a.note,300))||new Set(d.candidates.map(a=>a.id)).size!==6)return false;
+      if(!Array.isArray(d.candidates)||![6,12].includes(d.candidates.length)||!d.candidates.every(a=>athlete(a,true)&&n(a.cost,0,1e6)&&str(a.note,300))||new Set(d.candidates.map(a=>a.id)).size!==d.candidates.length)return false;
       if(!Array.isArray(d.scouted)||d.scouted.length>6||!d.scouted.every(a=>athlete(a,true)&&d.candidates.some(c=>c.id===a.id))||new Set(d.scouted.map(a=>a.id)).size!==d.scouted.length||!Array.isArray(d.recruitedIds)||d.recruitedIds.length!==d.scouted.length||!d.recruitedIds.every(id=>d.scouted.some(a=>a.id===id))||new Set(d.recruitedIds).size!==d.recruitedIds.length)return false;
       if(d.candidates.some(a=>d.athletes.some(b=>b.id===a.id))||Math.max(...d.athletes.concat(d.candidates).map(a=>Number(a.id.slice(8))))>=d.nextAthleteId)return false;
       for(const gender of ['boys','girls'])if(d.scouted.filter(a=>a.gender===gender).length>3)return false;
@@ -543,7 +676,7 @@
       if(MEETS.some(m=>m.week<d.week&&!d.completedMeets.includes(m.id)))return false;
       const due=MEETS.filter(m=>m.week===d.week&&!d.completedMeets.includes(m.id));if(!Array.isArray(d.pendingMeets))return false;const queue=d.pendingMeet?[d.pendingMeet,...d.pendingMeets]:d.pendingMeets;if(queue.length!==due.length||queue.some((m,i)=>!obj(m)||Object.entries(due[i]).some(([key,value])=>!['rating','description'].includes(key)&&m[key]!==value)||!n(m.rating,0,120)||!str(m.description,500)))return false;if(!d.pendingMeet&&d.pendingMeets.length)return false;
       if(!Array.isArray(d.competedThisWeek)||new Set(d.competedThisWeek).size!==d.competedThisWeek.length||!d.competedThisWeek.every(id=>d.athletes.some(a=>a.id===id))||typeof d.monthPlanPending!=='boolean')return false;
-      if(!Array.isArray(d.practiceCards)||d.practiceCards.length!==3||new Set(d.practiceCards.map(c=>c.id)).size!==3||!d.practiceCards.every(c=>{const ref=PRACTICE_CARDS.find(p=>p.id===c.id);return ref&&sameValue(c,ref);})||!d.practiceCards.some(c=>c.id===d.selectedPracticeCard))return false;
+      if(!Array.isArray(d.practiceCards)||d.practiceCards.length!==3||new Set(d.practiceCards.map(c=>c.id)).size!==3||!d.practiceCards.every(c=>[...PRACTICE_CARDS,...LEGACY_PRACTICE_CARDS].some(ref=>ref.id===c.id&&sameValue(c,ref)))||!d.practiceCards.some(c=>c.id===d.selectedPracticeCard))return false;
       if(!obj(d.medals)||!['gold','silver','bronze'].every(k=>n(d.medals[k],0,MAX_COUNT,true))||!obj(d.goal)||!['districtQualified','prefectureQualified','nationalsQualified','nationalsWon'].every(k=>typeof d.goal[k]==='boolean')||!(d.goal.wonYear===null||n(d.goal.wonYear,1,d.year,true)))return false;
       if(!Array.isArray(d.logs)||d.logs.length>100||!d.logs.every(l=>obj(l)&&n(l.year,1,d.year,true)&&n(l.week,1,48,true)&&str(l.text,500)))return false;
       const validResult=r=>{
@@ -581,16 +714,28 @@
           return r.members===undefined&&r.athleteIds===undefined;
         };
         if(!Array.isArray(c.schoolRecords)||c.schoolRecords.length>40||new Set(c.schoolRecords.map(r=>r.key)).size!==c.schoolRecords.length||!c.schoolRecords.every(schoolRecord))return false;
-        const alumnus=a=>obj(a)&&validId(a.id)&&!d.athletes.some(active=>active.id===a.id)&&str(a.name,40)&&['boys','girls'].includes(a.gender)&&INDIVIDUAL_EVENTS.some(e=>e.id===a.event&&(!e.gender||e.gender===a.gender))&&TRAITS.some(t=>t.name===a.trait)&&/^#[0-9a-fA-F]{6}$/.test(a.color)&&n(a.graduationYear,1,d.year-1,true)&&obj(a.stats)&&Object.keys(a.stats).length===7&&STAT_KEYS.every(k=>n(a.stats[k],0,100))&&obj(a.bestBySpec)&&Object.entries(a.bestBySpec).every(([key,value])=>athleteSpec(key,a)&&record(value,key.split(':')[0]));
+        const alumnus=a=>obj(a)&&validId(a.id)&&!d.athletes.some(active=>active.id===a.id)&&str(a.name,40)&&['boys','girls'].includes(a.gender)&&INDIVIDUAL_EVENTS.some(e=>e.id===a.event&&(!e.gender||e.gender===a.gender))&&TRAITS.some(t=>t.name===a.trait)&&/^#[0-9a-fA-F]{6}$/.test(a.color)&&n(a.graduationYear,1,d.year-1,true)&&validAbilities(a.stats)&&obj(a.bestBySpec)&&Object.entries(a.bestBySpec).every(([key,value])=>athleteSpec(key,a)&&record(value,key.split(':')[0]));
         if(!Array.isArray(c.alumni)||c.alumni.length>60||new Set(c.alumni.map(a=>a.id)).size!==c.alumni.length||!c.alumni.every(alumnus)||c.alumni.some((a,i)=>i>0&&a.graduationYear>c.alumni[i-1].graduationYear))return false;
-        const season=s=>obj(s)&&n(s.year,1,d.year-1,true)&&validMode(s.mode)&&typeof s.partial==='boolean'&&(s.partial?s.goalId===null:validGoal(s.goalId))&&typeof s.achieved==='boolean'&&n(s.reward,0,100000,true)&&(s.achieved?!s.partial&&s.reward===CAREER_GOALS.find(g=>g.id===s.goalId).reward:s.reward===0)&&medals(s.medals)&&n(s.personalBests,0,198,true)&&n(s.meetCount,0,11,true)&&n(s.interhighWins,0,18,true);
+        const season=s=>obj(s)&&n(s.year,1,d.year-1,true)&&validMode(s.mode)&&typeof s.partial==='boolean'&&(s.partial?s.goalId===null:validGoal(s.goalId))&&typeof s.achieved==='boolean'&&n(s.reward,0,100000,true)&&(s.achieved?!s.partial&&[0,CAREER_GOALS.find(g=>g.id===s.goalId).reward].includes(s.reward):s.reward===0)&&medals(s.medals)&&n(s.personalBests,0,198,true)&&n(s.meetCount,0,11,true)&&n(s.interhighWins,0,18,true);
         if(!Array.isArray(c.seasons)||c.seasons.length>30||new Set(c.seasons.map(s=>s.year)).size!==c.seasons.length||!c.seasons.every(season)||c.seasons.some((s,i)=>i>0&&s.year>=c.seasons[i-1].year))return false;
       }
-      if(d.lastReport!=null&&(!obj(d.lastReport)||!str(d.lastReport.title,100)||!Array.isArray(d.lastReport.changes)||!Array.isArray(d.lastReport.events)||!d.lastReport.events.every(s=>typeof s==='string')||!Array.isArray(d.lastReport.lines)||!d.lastReport.lines.every(s=>typeof s==='string')))return false;
+      if(d.facilityPlan?.year===d.year&&d.facilityPlan.used>2+(d.career?.season.goalRewarded?1:0))return false;
+      if(d.lastReport!=null){
+        const r=d.lastReport,change=c=>obj(c)&&validId(c.athleteId)&&str(c.name,40)&&str(c.training,40)&&TRAININGS.some(t=>t.id===c.trainingId)&&FOCUSES.some(f=>f.id===c.focus)&&obj(c.statGains)&&Object.entries(c.statGains).every(([key,gain])=>STAT_KEYS.includes(key)&&n(gain,0,100))&&n(c.energyChange,-100,100)&&n(c.injury,0,3,true)&&typeof c.message==='string'&&c.message.length<=500&&(c.before===undefined||validAbilities(c.before))&&(c.after===undefined||validAbilities(c.after))&&(c.coached===undefined||typeof c.coached==='boolean');
+        if(!obj(r)||!str(r.title,100)||!Array.isArray(r.changes)||r.changes.length>36||!r.changes.every(change)||!Array.isArray(r.events)||!r.events.every(s=>typeof s==='string')||!Array.isArray(r.lines)||!r.lines.every(s=>typeof s==='string'))return false;
+      }
+      if(d.lastReport?.route!==undefined){
+        const r=d.lastReport,abilityChange=c=>obj(c)&&validId(c.athleteId)&&str(c.name,40)&&STAT_KEYS.includes(c.key)&&n(c.before,0,100)&&n(c.after,c.before,100);
+        if(!validWeekRoute(r.route)||!['balanced','push','care'].includes(r.decision)||!str(r.decisionText,80)||!(r.coachedAthleteId===null||validId(r.coachedAthleteId)))return false;
+        if(!Array.isArray(r.rankUps)||r.rankUps.length>324||!r.rankUps.every(c=>abilityChange(c)&&c.from===getAbilityRank(c.before)&&c.to===getAbilityRank(c.after)&&c.from!==c.to))return false;
+        if(!Array.isArray(r.highlights)||r.highlights.length>3||!r.highlights.every(c=>abilityChange(c)&&str(c.label,30)&&n(c.gain,0,100)&&c.rankBefore===getAbilityRank(c.before)&&c.rankAfter===getAbilityRank(c.after)&&n(c.energyChange,-100,100)&&typeof c.coached==='boolean'))return false;
+        if(!['before','after'].every(key=>Array.isArray(r[key])&&r[key].length<=36&&r[key].every(a=>obj(a)&&validId(a.athleteId)&&validAbilities(a.stats)&&n(a.energy,0,100))))return false;
+        if(r.changes.length>36||!r.changes.every(c=>obj(c)&&validId(c.athleteId)&&validAbilities(c.before)&&validAbilities(c.after)&&n(c.beforeEnergy,0,100)&&n(c.afterEnergy,0,100)))return false;
+      }
       return true;
     }catch(_){return false;}
   }
-  const api={VERSION,START_YEAR,EVENTS,INDIVIDUAL_EVENTS,RELAY_LEGS,TRAININGS,FOCUSES,PRACTICE_CARDS,FACILITIES,MEETS,STAT_KEYS,STAT_NAMES,GENDER_NAMES,INDOOR_STANDARDS,CAREER_GOALS,CAREER_MODES,createGame,getCalendar,getSchedule,getNextMeet,getMeetEvents,getMeetField,getEntryStatus,getEligibleAthletes,getRecordKey,getAge,advanceWeek,setTraining,setFocus,confirmMonthlyPlan,choosePracticeCard,setIntensity,upgradeFacility,recruitAthlete,scoutAthlete,getCandidates,runMeet,skipMeet,validateEntries,getAthleteRating,getSuitability,getRelayRating,predictResult,predictRelayResult,getDefaultTraining,formatResult,getFacilityCost,getSummary,validateSave,getCareer,chooseSeasonGoal,setSeasonMode};
+  const api={WEEK_BLOCKS,getWeekJourney,setWeekRoute,getStat,getAbilityRank,getFacilityPlan,VERSION,START_YEAR,EVENTS,INDIVIDUAL_EVENTS,RELAY_LEGS,TRAININGS,FOCUSES,PRACTICE_CARDS,FACILITIES,MEETS,STAT_KEYS,STAT_NAMES,GENDER_NAMES,INDOOR_STANDARDS,CAREER_GOALS,CAREER_MODES,createGame,getCalendar,getSchedule,getNextMeet,getMeetEvents,getMeetField,getEntryStatus,getEligibleAthletes,getRecordKey,getAge,advanceWeek,setTraining,setFocus,confirmMonthlyPlan,choosePracticeCard,setIntensity,upgradeFacility,recruitAthlete,scoutAthlete,getCandidates,runMeet,skipMeet,validateEntries,getAthleteRating,getSuitability,getRelayRating,predictResult,predictRelayResult,getDefaultTraining,formatResult,getFacilityCost,getSummary,validateSave,getCareer,chooseSeasonGoal,setSeasonMode};
   for(const name of ['setTraining','setFocus','confirmMonthlyPlan','choosePracticeCard','setIntensity','upgradeFacility','recruitAthlete','scoutAthlete']) { const action=api[name];api[name]=(state,...args)=>{const result=action(state,...args);if(result.ok)ensureCareer(state);return result;}; }
   root.TrackGame=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof globalThis!=='undefined'?globalThis:window);

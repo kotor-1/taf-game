@@ -56,12 +56,14 @@ test('career getters are non-mutating; annual choices lock after April week1 and
   assert.equal(G.validateSave(s), true);
 });
 
-test('all-round goal grants its support fund once, independently of tournament prizes', () => {
+test('all-round goal grants one additional facility request without changing legacy funds', () => {
   const s = G.createGame(1); G.chooseSeasonGoal(s, 'allRound'); advanceTo(s, 5); peak(s);
   const money = s.money, result = G.runMeet(s, individualEntries(s), 'steady');
   assert.equal(result.ok, true);
-  assert.equal(result.summary.careerReward, 60000);
-  assert.equal(s.money, money + result.summary.prize + 60000);
+  assert.equal(result.summary.careerReward, 0);
+  assert.equal(G.getFacilityPlan(s).total, 3);
+  assert.equal(s.money, money);
+  assert.equal(result.summary.prize, 0);
   assert.equal(G.getCareer(s).goal.achieved, true);
   assert.equal(G.getCareer(s).lifetime.goalsAchieved, 1);
   assert.match(result.summary.careerMessage, /年度目標/);
@@ -79,7 +81,8 @@ test('individual personal-best goal counts first marks and spec improvements, ex
   assert.equal(G.getCareer(s).goal.current, 12);
   advanceTo(s, 7); peak(s);
   const result = G.runMeet(s, individualEntries(s), 'steady');
-  assert.equal(result.summary.careerReward, 50000);
+  assert.equal(result.summary.careerReward, 0);
+  assert.equal(G.getFacilityPlan(s).total, 3);
   assert.equal(G.getCareer(s).goal.current, 24);
   const open = G.createGame(3); advanceTo(open, 7); peak(open);
   const openResult = G.runMeet(open, individualEntries(open), 'steady');
@@ -98,7 +101,8 @@ test('relay goal needs both genders, with four named record holders retained', (
   assert.equal(open.results[0].official, false);
   assert.equal(G.getCareer(s).goal.current, 1);
   advanceTo(s, 21); peak(s);
-  assert.equal(G.runMeet(s, relay(s, 'girls'), 'steady').summary.careerReward, 60000);
+  assert.equal(G.runMeet(s, relay(s, 'girls'), 'steady').summary.careerReward, 0);
+  assert.equal(G.getFacilityPlan(s).total, 3);
   const records = G.getCareer(s).schoolRecords.filter(r => r.eventId === 'relay');
   assert.equal(records.length, 2);
   assert.ok(records.every(r => r.members.length === 4 && r.athleteIds.length === 4 && r.members.every(m => m.name)));
@@ -114,11 +118,12 @@ for (const { goalId, seed, tactic, titles } of [
     advanceTo(s, week); peak(s); G.runMeet(s, boys100(s), 'steady');
     assert.equal(G.getCareer(s).goal.rewarded, false);
   }
-  advanceTo(s, 16); peak(s);
+  advanceTo(s, 16); peak(s, goalId === 'interhigh' ? 90 : 100);
   const result = G.runMeet(s, boys100(s), tactic);
   assert.equal(result.results[0].official, true);
   assert.equal(result.results[0].medal === 'gold', titles === 1, 'Appearance and championship goals exercise distinct outcomes');
-  assert.equal(result.summary.careerReward, goalId === 'interhigh' ? 80000 : 100000);
+  assert.equal(result.summary.careerReward, 0);
+  assert.equal(G.getFacilityPlan(s).total, 3);
   assert.equal(G.getCareer(s).lifetime.interhighTitles, titles);
   assert.equal(G.getCareer(s).lifetime.currentStreak, titles);
   assert.equal(G.validateSave(s), true);
@@ -133,7 +138,8 @@ test('indoor goal uses official age/standard-qualified results, not an outdoor m
   const runner = s.athletes.find(a => a.gender === 'boys');
   assert.equal(G.getEntryStatus(s, runner, 'boys:60m').official, true);
   const result = G.runMeet(s, { 'boys:60m': runner.id }, 'steady');
-  assert.equal(result.summary.careerReward, 80000);
+  assert.equal(result.summary.careerReward, 0);
+  assert.equal(G.getFacilityPlan(s).total, 3);
   assert.equal(G.getCareer(s).goal.current, 1);
   assert.ok(G.getCareer(s).schoolRecords.some(r => r.eventId === '60m'));
   assert.equal(G.validateSave(s), true);
@@ -215,7 +221,7 @@ test('35-year history is bounded while lifetime totals and yearly resets remain 
   assert.equal(G.validateSave(s), true);
 });
 
-test('a legacy goal recovered after the last meet is paid once at year end and archived as achieved', () => {
+test('a legacy goal recovered after the last meet is archived once without reviving money rewards', () => {
   const legacy = G.createGame(12);
   // Choose a different, unfulfilled goal while building the legacy history,
   // so this fixture has never received a goal reward.
@@ -241,13 +247,14 @@ test('a legacy goal recovered after the last meet is paid once at year end and a
   const paidAtYearEnd = G.advanceWeek(legacy), noDuplicate = G.advanceWeek(alreadyPaid);
   assert.equal(paidAtYearEnd.ok, true);
   assert.equal(noDuplicate.ok, true);
-  assert.equal(legacy.money - alreadyPaid.money, 50000);
+  assert.equal(legacy.money, alreadyPaid.money);
   assert.equal(legacy.money - unpaidMoney, paidAtYearEnd.report.balance);
-  assert.equal(paidAtYearEnd.report.income - noDuplicate.report.income, 50000);
-  assert.ok(paidAtYearEnd.report.events.some(text => text.includes('年度目標') && text.includes('50,000')));
+  assert.equal(paidAtYearEnd.report.income, 0);
+  assert.equal(noDuplicate.report.income, 0);
+  assert.ok(paidAtYearEnd.report.events.some(text => text.includes('年度目標') && text.includes('整備')));
   assert.equal(noDuplicate.report.events.some(text => text.includes('年度目標')), false);
   assert.equal(legacy.career.seasons[0].achieved, true);
-  assert.equal(legacy.career.seasons[0].reward, 50000);
+  assert.equal(legacy.career.seasons[0].reward, 0);
   assert.equal(legacy.career.lifetime.goalsAchieved, 1);
   assert.equal(legacy.career.season.goalRewarded, false);
   assert.equal(G.validateSave(legacy), true);

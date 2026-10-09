@@ -93,10 +93,10 @@ async function checkFullWalkthrough(browser,label,viewport){
     assert.equal((await readGame(page)).monthPlanPending,false);
     await close(page);await tutorialAction(page,'next');await expectTutorial(page,{step:2,completed:false});
 
-    await tutorialAction(page,'do');assert.equal((await readTutorial(page)).completed,false,'Card step requires an explicit selection');
-    const card=page.locator('[data-action="practice-card"]:not(.selected)').first();
-    const cardId=await card.getAttribute('data-id');await card.click();await expectTutorial(page,{step:2,completed:true});
-    assert.equal((await readGame(page)).selectedPracticeCard,cardId);assert.equal((await readGame(page)).week,1);
+    await tutorialAction(page,'do');assert.equal((await readTutorial(page)).completed,false,'Route step requires an explicit selection');
+    const block=page.locator('select[data-week-block="0"]');
+    const blockId=(await block.inputValue())==='load'?'recovery':'load';await block.selectOption(blockId);await expectTutorial(page,{step:2,completed:true});
+    assert.equal((await readGame(page)).weekRoute[0],blockId);assert.equal((await readGame(page)).week,1);
     await tutorialAction(page,'next');await expectTutorial(page,{step:3,completed:false});
     const beforeGoal=await readGame(page);
     await tutorialAction(page,'year-plan');await expectTutorial(page,{step:3,completed:false});
@@ -106,9 +106,16 @@ async function checkFullWalkthrough(browser,label,viewport){
     assert.equal((await readGame(page)).career.season.goalId,'relay');assert.equal((await readGame(page)).career.season.mode,'challenge');
     assert.equal((await readGame(page)).week,1);await expectTutorial(page,{step:3,completed:false});
     const beforeWeek=await readGame(page);await tutorialAction(page,'do');
+    await page.locator('#practice-dialog[open]').waitFor();
+    assert.deepEqual(await readGame(page),beforeWeek,'Watching a session before choosing coaching must not advance the saved week');
+    if(!await page.locator('[data-training-action="decide"]:visible').count())await page.locator('[data-training-action="skip"]').click();
+    await page.locator('[data-training-action="decide"][data-decision="balanced"]').click();
     await expectTutorial(page,{step:3,completed:true});const afterWeek=await readGame(page);
     assert.equal(afterWeek.week,beforeWeek.week+1);assert.equal(afterWeek.totalWeeks,beforeWeek.totalWeeks+1,'One guided advance is exactly one week');
-    await overflow(page,label+' weekly report');await screenshot(page,label+'-week');await close(page);
+    if(await page.locator('#practice-dialog').getAttribute('data-phase')!=='finish')await page.locator('[data-training-action="skip"]').click();
+    await overflow(page,label+' live training');await screenshot(page,label+'-week');
+    await page.locator('.practice-finish-action [data-training-action="close"]').click();await page.locator('.academy-summary').waitFor();
+    assert.equal(await page.locator('#game-dialog[open]').count(),0,'Weekly highlights are inline, without a compulsory report modal');
     await tutorialAction(page,'next');await expectTutorial(page,{step:4,completed:false});
 
     const readOnly=await readGame(page),readOnlyBackup=await readBackup(page);

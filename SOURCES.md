@@ -2,6 +2,20 @@
 
 確認日：2026年10月8日。日本陸上競技連盟の一次資料を確認。
 
+## 能力とトレーニング設計の参考（2026年10月9日確認）
+
+生理学・バイオメカニクスと青少年の長期育成に関する一次資料を、ゲームの能力分類と負荷・回復の考え方に参照した。
+
+- [NSCA Position Statement on Long-Term Athletic Development（2016／公式紹介2017）](https://www.nsca.com/education/articles/nsca-position-statement-on-long-term-athletic-development/)：青少年の個別性を踏まえた、身体能力・運動技能の多面的な発達。特定種目の成績だけで育成を捉えない。
+- [IOC consensus statement on youth athletic development（2015）](https://bjsm.bmj.com/content/49/13/843)：筋力・パワー・スピード・運動技能等の育成、負荷の調整と十分な休養・回復を扱う。成長段階と個人差を考慮し、痛みや故障を押して練習させない方針の参考。
+- [Morin, Edouard & Samozino（2011）：Technical ability of force application as a determinant factor of sprint performance](https://pubmed.ncbi.nlm.nih.gov/21364480/)：加速局面では単純な力の大きさだけでなく、地面への力の向きと技術が関与する。最高速度・加速力・瞬発力・技術を単一能力にまとめない参考。
+- [Spencer & Gastin（2001）：Energy system contribution during 200- to 1500-m running in highly trained athletes](https://pubmed.ncbi.nlm.nih.gov/11194103/)：距離により有酸素・無酸素エネルギー供給の寄与は異なり、複数の系が関与する。有酸素持久力とスピード持久力の区別の参考。研究対象は高度に鍛練された選手であり、その測定比率を高校生全員の値やゲームの種目別重みに転用していない。
+- [Busso, Candau & Lacour（1994）：Fatigue and fitness modelled from the effects of training on performance](https://pubmed.ncbi.nlm.nih.gov/7957156/)：[Banister, Carter & Zarkadas（1999）：Training theory and taper: validation in triathlon athletes](https://pubmed.ncbi.nlm.nih.gov/10029340/)とともに、トレーニングの正の適応と一時的な疲労を分ける考え方の参考。モデルの係数・時定数を本作の練習処方として採用するものではない。
+
+本作の9能力は、加速力・最高速度・スピード持久力・有酸素持久力・瞬発力・種目技術・動作制御・可動性・集中力。陸上で使う能力をプレイしやすく分類したもので、9つの独立した医学的測定項目という意味ではない。集中力は心理・技能面のゲーム表現であり、身体能力と同じ生理学的尺度ではない。
+
+0〜100の能力値とS〜Gのランク、成長量、疲労量、回復期間、種目別の重みはゲーム独自の設定。実際のVO2max・血中乳酸値・筋力測定値などへの換算は行わず、実在の選手への練習処方・医学的助言には使用できない。可動性を上げるほど無条件に速くなる、集中力が高ければ故障を無視できる、全員が一定時間で必ず超回復する、といった意味づけはしない。
+
 ## 室内大会の扱い
 
 - [2026大会の中止・終了の公式発表（2025年3月26日）](https://www.jaaf.or.jp/news/article/21505/)

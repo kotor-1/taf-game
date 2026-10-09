@@ -86,7 +86,14 @@ async function observe(page){
       const [A,B]=accounts;console.log('CHECK: upload current full fixture to existing account A.');await login(page,A);assert.deepEqual(await readSave(page,accountKey(A)),{...game,schoolName:'長期アカウントＡ高校'},'Upload this run\'s complete fixture rather than an older cloud save from a previous QA run');
       await close(page);await page.locator('[data-page="overview"]').first().click();
       let before=await readSave(page,accountKey(A));if(before.monthPlanPending){await action(page,'monthly-plan').click();await action(page,'confirm-plan').click();await close(page);}
-      await action(page,'advance').click();await close(page);await waitSynced(page,A);const progressed=await readSave(page,accountKey(A));assert.equal(progressed.totalWeeks,game.totalWeeks+1);
+      const beforePractice=await readSave(page,accountKey(A));
+      await action(page,'start-training').click();await page.locator('#practice-dialog[open]').waitFor();
+      assert.deepEqual(await readSave(page,accountKey(A)),beforePractice,'Live practice remains uncommitted until the coaching choice');
+      if(!await page.locator('[data-training-action="decide"]:visible').count())await page.locator('[data-training-action="skip"]').click();
+      await page.locator('[data-training-action="decide"][data-decision="balanced"]').click();
+      if(await page.locator('#practice-dialog').getAttribute('data-phase')!=='finish')await page.locator('[data-training-action="skip"]').click();
+      await page.locator('.practice-finish-action [data-training-action="close"]').click();
+      await page.locator('.academy-summary').waitFor();await waitSynced(page,A);const progressed=await readSave(page,accountKey(A));assert.equal(progressed.totalWeeks,game.totalWeeks+1);
       console.log('CHECK: load latest cloud save into a separate mobile browser.');const second=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const other=await second.newPage();await observe(other);await login(other,A);await close(other);
       assert.deepEqual(await readSave(other,accountKey(A)),progressed);assert.equal((await readSave(other,accountKey(A))).history.length,60);await other.screenshot({path:path.join(output,'long-cloud-mobile.png'),fullPage:true});
       await logout(page);assert.equal((await readSave(page)).schoolName,'長期ゲスト保存高校');await login(page,B);assert.deepEqual(await readSave(page,accountKey(B)),{...game,schoolName:'長期アカウントＢ高校'});assert.equal((await readSave(page,accountKey(A))).totalWeeks,progressed.totalWeeks);

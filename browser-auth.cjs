@@ -79,7 +79,12 @@ async function advance(page,account){
   if(data.monthPlanPending){await gameAction(page,'monthly-plan').click();await gameAction(page,'confirm-plan').click();await closeDialog(page);}
   data=await readSave(page,account);
   assert.equal(data.pendingMeet,null);
-  await gameAction(page,'advance').click();await closeDialog(page);
+  await gameAction(page,'start-training').click();await page.locator('#practice-dialog[open]').waitFor();
+  assert.deepEqual(await readSave(page,account),data,'Opening live practice must not change the committed cloud save');
+  if(!await page.locator('[data-training-action="decide"]:visible').count())await page.locator('[data-training-action="skip"]').click();
+  await page.locator('[data-training-action="decide"][data-decision="balanced"]').click();
+  if(await page.locator('#practice-dialog').getAttribute('data-phase')!=='finish')await page.locator('[data-training-action="skip"]').click();
+  await page.locator('.practice-finish-action [data-training-action="close"]').click();
   assert.equal((await readSave(page,account)).week,data.week+1);
 }
 async function checkOverflow(page,label){

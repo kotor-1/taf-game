@@ -87,8 +87,8 @@ async function checkOverflow(page, label) {
 async function confirmMonthlyPlan(page) {
   const before = await readSave(page);
   if (!before.monthPlanPending) return;
-  if (!await page.locator('[data-action="confirm-plan"]').count()) await click(page, 'monthly-plan');
-  await page.locator('[data-action="confirm-plan"]').waitFor();
+  if (!await page.locator('[data-action="confirm-plan"]:visible').count()) await click(page, 'monthly-plan');
+  await page.locator('[data-action="confirm-plan"]:visible').waitFor();
   assert.equal((await readSave(page)).week, before.week, 'Opening the monthly plan must not advance time');
   await click(page, 'confirm-plan');
   assert.equal((await readSave(page)).monthPlanPending, false);
@@ -97,9 +97,15 @@ async function confirmMonthlyPlan(page) {
 async function advanceWeek(page) {
   await confirmMonthlyPlan(page);
   const before = await readSave(page);
-  await click(page, 'advance');
+  await click(page, 'start-training');
+  await page.locator('#practice-dialog[open]').waitFor();
+  assert.deepEqual(await readSave(page), before, 'Starting the animation alone must not commit a week');
+  if (!await page.locator('[data-training-action="decide"]:visible').count()) await page.locator('[data-training-action="skip"]').click();
+  await page.locator('[data-training-action="decide"][data-decision="balanced"]').click();
   assert.equal((await readSave(page)).week, before.week + 1);
-  await close(page);
+  if (await page.locator('#practice-dialog').getAttribute('data-phase') !== 'finish') await page.locator('[data-training-action="skip"]').click();
+  await page.locator('.practice-finish-action [data-training-action="close"]').click();
+  await page.locator('.academy-summary').waitFor();
 }
 async function startAndFinishMeet(page) {
   await click(page, 'start-meet');
@@ -275,7 +281,8 @@ async function checkPersistence(browser) {
     assert.equal((await readSave(page)).athletes.find(a => a.id === focusId).focus, 'speed');
     await page.screenshot({ path: artifact('hokago-v2-monthly-training.png'), fullPage: true });
     await confirmMonthlyPlan(page);
-    await page.locator('[data-action="practice-card"]').first().click();
+    await page.locator('select[data-week-block="0"]').selectOption('speed');
+    assert.equal((await readSave(page)).weekRoute[0], 'speed');
     await page.locator('[data-action="intensity"][data-id="easy"]').click();
     assert.equal((await readSave(page)).intensity, 'easy');
     await navigate(page, 'team');
@@ -283,6 +290,8 @@ async function checkPersistence(browser) {
     const detail = await page.locator('#game-dialog').textContent();
     assert.match(detail, /適性/);
     assert.match(detail, /スピード/);
+    assert.equal(await page.locator('#game-dialog [data-ability]').count(), 9);
+    assert.equal(await page.locator('#game-dialog .academy-rank').count(), 9);
     await checkOverflow(page, 'desktop ability dialog');
     await close(page);
     await navigate(page, 'scouting');
@@ -292,7 +301,8 @@ async function checkPersistence(browser) {
     saved = await readSave(page);
     await page.locator('[data-action="upgrade"][data-id="recovery"]').click();
     assert.equal((await readSave(page)).facilities.recovery, 2);
-    assert.equal((await readSave(page)).money, saved.money - engine.getFacilityCost(saved, 'recovery'));
+    assert.equal(engine.getFacilityPlan(await readSave(page)).used, engine.getFacilityPlan(saved).used + 1);
+    assert.equal((await readSave(page)).money, saved.money, 'School facility requests do not spend club funds');
 
     await navigate(page, 'overview');
     while ((await readSave(page)).week < 5) await advanceWeek(page);
@@ -367,7 +377,7 @@ async function checkPersistence(browser) {
     saved = await readSave(page);
     assert.equal(saved.athletes.length, 12);
     assert.ok(saved.scouted.some(a => a.id === candidateId));
-    assert.ok(saved.money < beforeRecruit.money);
+    assert.equal(saved.money, beforeRecruit.money, 'Scouting is free');
     await checkOverflow(page, 'desktop October scout');
     await page.screenshot({ path: artifact('hokago-v2-scouting.png'), fullPage: true });
     await close(page);
@@ -428,7 +438,7 @@ async function checkPersistence(browser) {
     await desktop.close(); await mobile.close();
     await checkPersistence(browser);
     assert.deepEqual(errors, [], 'No browser runtime errors or failed requests');
-    console.log('PASS: 12 first-year athletes; seven desktop/mobile tabs; monthly plans and cards; suitability; October scouting; 14 gender-separated event results; female hurdles replay; indoor event/standard display and dual meet queue; v2 save/reload/export/import; v1 preservation; mobile layouts.');
+    console.log('PASS: 12 first-year athletes; seven desktop/mobile tabs; monthly plans and seven-day routes; coaching and inline weekly highlights; nine abilities/ranks; school facility requests; free October scouting; 14 gender-separated event results; female hurdles replay; indoor event/standard display and dual meet queue; v2 save/reload/export/import; v1 preservation; mobile layouts.');
     console.log('Screenshots: ' + artifact('hokago-v2-desktop.png') + ', ' + artifact('hokago-v2-mobile.png'));
     console.log('PASS: published-path assets; desktop/mobile manual save and rendered reload; previous-save restore; damaged-primary recovery; 60-meet export/import over 2 MB; failed-write warning and in-memory export/import; retry after storage recovery; stale-tab overwrite prevention.');
   } finally { await browser.close(); }

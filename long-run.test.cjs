@@ -6,7 +6,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const G=require('./engine.js');
 
-// Exercise public player actions only. No boosted stats, forced wins, or free money.
+// Exercise public player actions only. No boosted stats or forced wins. New school facilities and scouting are free.
 const requestedYears=Number(process.env.LONG_RUN_YEARS||128);
 assert.ok(Number.isSafeInteger(requestedYears)&&requestedYears>0,'LONG_RUN_YEARS must be a positive finite integer');
 const YEARS=Math.max(101,requestedYears);
@@ -34,7 +34,7 @@ function rosterChecks(state){
     for(const years of Object.values(athlete.officialRecords||{}))assert.ok(Object.keys(years).length<=4);
   }
   assert.ok(Number.isFinite(state.money)&&state.money>=0);
-  assert.ok(state.logs.length<=100&&state.history.length<=60&&state.candidates.length===6&&state.scouted.length<=6);
+  assert.ok(state.logs.length<=100&&state.history.length<=60&&state.candidates.length===12&&state.scouted.length<=6);
   assert.ok(state.pendingMeets.length<=1&&state.completedMeets.length<=G.MEETS.length&&state.competedThisWeek.length<=36);
   if(state.career){
     assert.equal(state.career.season.year,state.year);
@@ -76,14 +76,18 @@ function trainingWeek(state,strategy){
     success(G.confirmMonthlyPlan(state),'monthly confirmation');
   }
   for(const athlete of state.athletes)success(G.setTraining(state,athlete.id,athlete.injury||athlete.energy<strategy.restAt?'rest':G.getDefaultTraining(athlete.event)),'training');
-  const priorities=strategy.id==='overtraining'?['camp','technical','teamwork','mobility','basic','condition']:strategy.id==='adaptive'?['technical','mobility','teamwork','condition','basic','camp']:['condition','teamwork','mobility','technical','basic','camp'];
-  const card=priorities.map(id=>state.practiceCards.find(c=>c.id===id)).find(c=>c&&state.money>=c.cost+strategy.reserve)||state.practiceCards.find(c=>c.id==='basic');
-  success(G.choosePracticeCard(state,card.id),'practice card');
-  for(const id of strategy.invest){const cost=G.getFacilityCost(state,id);if(cost!==null&&state.money>=cost+strategy.reserve)success(G.upgradeFacility(state,id),'facility investment');}
+  const averageEnergy=state.athletes.reduce((sum,a)=>sum+a.energy,0)/state.athletes.length;
+  const preMeet=G.getNextMeet(state).weeksUntil<=1;
+  const route=strategy.id==='overtraining'?['load','load','speed']:strategy.id==='frugal'?['recovery','mobility','skill']:preMeet?['mobility','skill','recovery']:['load','aerobic','recovery'];
+  success(G.setWeekRoute(state,route),'weekly route');
+  for(const id of strategy.invest){const cost=G.getFacilityCost(state,id);if(cost!==null&&G.getFacilityPlan(state).available>0)success(G.upgradeFacility(state,id),'facility investment');}
+  const target=state.athletes.filter(a=>!a.injury&&a.training!=='rest').sort((a,b)=>G.getAthleteRating(b,b.event)-G.getAthleteRating(a,a.event))[0];
+  const decision=strategy.id==='overtraining'?'push':strategy.id==='frugal'||preMeet||averageEnergy<70?'care':'balanced';
+  return {decision,...(target?{athleteId:target.id}:{})};
 }
 function runCampaign(strategy,years){
   let state=G.createGame(strategy.seed);const started=performance.now();
-  const metrics={strategy:strategy.id,years,weeks:0,meets:0,entered:0,skipped:0,scouts:0,graduates:0,injuries:0,results:0,indoorStarts:0,maxBytes:0,maxStoredChars:0,validationMs:0};
+  const metrics={strategy:strategy.id,years,weeks:0,meets:0,entered:0,skipped:0,scouts:0,graduates:0,injuries:0,results:0,indoorStarts:0,maxBytes:0,maxStoredChars:0,validationMs:0,decisionCounts:{balanced:0,push:0,care:0}};
   const divisionCoverage=new Set(),meetCoverage=new Set(),scoutedIds=new Set();
   function validate(label){const start=performance.now();assert.equal(G.validateSave(state),true,`${strategy.id}: ${label}, year ${state.year}, week ${state.week}`);metrics.validationMs+=performance.now()-start;}
   validate('start');
@@ -93,7 +97,7 @@ function runCampaign(strategy,years){
       const candidates=G.getCandidates(state).sort((a,b)=>strategy.id==='adaptive'?b.potential-a.potential:a.cost-b.cost);
       for(const candidate of candidates){
         if(state.scouted.length>=strategy.scout)break;
-        if(state.money>=candidate.cost+strategy.reserve){assert.ok(!scoutedIds.has(candidate.id),'a later cohort must never reuse a scouting ID');success(G.scoutAthlete(state,candidate.id),'October scouting');scoutedIds.add(candidate.id);metrics.scouts++;}
+        if(state.scouted.filter(a=>a.gender===candidate.gender).length<3){assert.ok(!scoutedIds.has(candidate.id),'a later cohort must never reuse a scouting ID');success(G.scoutAthlete(state,candidate.id),'October scouting');scoutedIds.add(candidate.id);metrics.scouts++;}
       }
     }
     if(state.pendingMeet){
@@ -105,9 +109,9 @@ function runCampaign(strategy,years){
       validate('meet '+id);
       continue;
     }
-    trainingWeek(state,strategy);
+    const coaching=trainingWeek(state,strategy);
     const previousYear=state.year,oldRoster=state.athletes.map(a=>({id:a.id,grade:a.grade})),committed=state.scouted.map(a=>a.id);
-    const outcome=success(G.advanceWeek(state),'advance');metrics.weeks++;metrics.injuries+=outcome.report.changes.filter(c=>c.injury>0).length;
+    const outcome=success(G.advanceWeek(state,coaching),'advance');metrics.weeks++;metrics.decisionCounts[outcome.report.decision]++;metrics.injuries+=outcome.report.changes.filter(c=>c.injury>0).length;
     if(state.year!==previousYear){
       const graduates=oldRoster.filter(a=>a.grade===3);metrics.graduates+=graduates.length;
       assert.equal(state.year,previousYear+1);assert.equal(state.week,1);assert.equal(state.athletes.length,Math.min(state.year,3)*12);
@@ -129,6 +133,7 @@ function runCampaign(strategy,years){
   }
   rosterChecks(state);validate('final');
   assert.equal(state.year,years+1);assert.equal(state.week,1);assert.equal(metrics.meets,years*G.MEETS.length);
+  assert.equal(Object.values(metrics.decisionCounts).reduce((a,b)=>a+b,0),years*48);
   assert.equal(metrics.graduates,Math.max(0,years-2)*12);assert.ok(metrics.scouts>years,'scouting actually exercised for over a century');
   for(const gender of ['boys','girls'])for(const event of G.EVENTS.filter(e=>!e.indoor&&(!e.gender||e.gender===gender)))assert.ok(divisionCoverage.has(gender+':'+event.id),'every outdoor gendered event must be exercised');
   assert.ok(metrics.maxBytes<20*1024*1024,'cloud save must fit the documented 20 MiB limit');
@@ -172,12 +177,12 @@ test('week and athlete counters can cross the former one-billion validation limi
   assert.ok(state.athletes.some(a=>Number(a.id.slice(8))>1e9));assert.ok(state.totalWeeks>1e9);
   assert.equal(G.validateSave(state),true);assert.equal(G.validateSave(JSON.stringify(state)),true);
 });
-test('large treasuries and medal totals remain safe through real weekly and meet rewards',()=>{
+test('legacy treasuries remain unchanged while medal totals safely increase through real competition',()=>{
   const state=G.createGame(17);state.money=1e12;state.medals.gold=1e9;
   assert.equal(G.validateSave(state),true);while(state.week<5)advanceWithoutCompetition(state);
   const runner=state.athletes.find(a=>a.gender==='boys');for(const key of G.STAT_KEYS)runner.stats[key]=100;runner.energy=100;runner.morale=100;runner.injury=0;
   success(G.runMeet(state,{'boys:100m':runner.id},'steady'),'large-counter meet');
-  assert.ok(state.money>1e12);assert.equal(state.medals.gold,1000000001);assert.equal(G.validateSave(state),true);
+  assert.equal(state.money,1e12);assert.equal(state.medals.gold,1000000001);assert.equal(G.validateSave(state),true);
   state.money=Number.MAX_SAFE_INTEGER-1;state.medals.gold=Number.MAX_SAFE_INTEGER;
   while(state.week<7)advanceWithoutCompetition(state);
   success(G.runMeet(state,{'boys:100m':runner.id},'steady'),'safe-integer cap meet');
