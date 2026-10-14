@@ -1,6 +1,6 @@
 # Supabase の初期設定
 
-対象プロジェクト: `jzjzjoabrqqijbynnkwa` / 公開ゲーム: https://kotor-1.github.io/taf-game/
+対象プロジェクト: `jzjzjoabrqqijbynnkwa` / 公開ゲーム: https://taf-game.fly.dev/
 
 ユーザーは自分で ID とパスワードを決めます。メールアドレスの入力・確認はありません。忘れた場合の問い合わせ先は **rkoto2810@gmail.com** です。問い合わせメールを自動送信する機能ではなく、利用者が自分で問い合わせる運用です。
 
@@ -12,7 +12,7 @@
 - Email / Password: ON
 - Confirm email（メールアドレスの確認）: **OFF**
 - パスワード最短文字数: **8**（ゲーム側は8〜128文字）
-- Site URL: `https://kotor-1.github.io/taf-game/`
+- 推奨Site URL: `https://taf-game.fly.dev/`（Fly.io移行後）。この文書の変更はSupabaseの管理画面設定を自動更新しません。現在のID・パスワード認証はリダイレクトを使わないため、旧URLの設定でも利用できます。
 
 ID は前後の空白を除去して小文字に統一し、半角英数字と `_` の4〜20文字です。Supabase Auth には `ID@id.taf-game.invalid` の形式で登録します。このアドレスにはメールを配信しません。内部アドレスを実際の連絡先へ変更せず、ID は固定して運用してください。
 

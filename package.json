@@ -15,7 +15,8 @@
     "test:storage": "node browser-storage.cjs",
     "test:tutorial": "node browser-tutorial.cjs",
     "test:fields": "node browser-field.cjs",
-    "test:journey": "node browser-journey.cjs"
+    "test:journey": "node browser-journey.cjs",
+    "deploy:fly": "fly deploy --remote-only --ha=false"
   },
   "engines": {
     "node": ">=18"
